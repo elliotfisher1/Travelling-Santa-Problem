@@ -30,8 +30,8 @@ A large penalty is applied to routes that break the darkness constraint (configu
 - **Darkness constraint**:
   - Uses city sunrise/sunset with buffers
   - Converts between UTC and local time using `tz_offset`
-- **Physics-inspired cost**:
-  - “Work” approximated via drag-style model:  
+- **Physics cost**:
+  - Work approximated via drag-style model:  
     `0.5 * rho_air * area * v^2 * distance`
   - Dynamic cross-sectional area shrinks as population coverage increases
 - **Outputs**:
