@@ -1,0 +1,1011 @@
+import os
+import json
+import logging
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import csv
+from datetime import datetime, timedelta
+from typing import Tuple, List, Dict, Optional, Any
+import matplotlib.dates as mdates
+
+# ==============================================================================
+# Logging Configuration
+# ==============================================================================
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# ==============================================================================
+# CONSTANTS AND DEFAULT PARAMETERS
+# ==============================================================================
+MAIN_OUTPUT_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem 50')
+
+NUM_ITERATIONS = 6000
+PROGRESS_UPDATE_INTERVAL = max(1, int(NUM_ITERATIONS / 1000))
+SPECIAL_ITERS = set(np.linspace(1, NUM_ITERATIONS, num=600, dtype=int))
+NUM_ANTS = 50
+# ==============================================================================
+# PHEROMONE EVOLUTION OUTPUT SETTINGS
+# ==============================================================================
+PHEROMONE_EVOLUTION_DIR = os.path.join(MAIN_OUTPUT_DIR, 'pheromone_evolution')
+os.makedirs(PHEROMONE_EVOLUTION_DIR, exist_ok=True)
+# save every 0.5% of iterations
+PHEROMONE_SAVE_INTERVAL = max(1, int(np.ceil(NUM_ITERATIONS * 0.1)))
+
+# ACO parameters
+ALPHA = 3         # pheromone influence
+BETA = 2.1          # heuristic influence
+RHO = 0.5         # base evaporation rate
+Q = 1.0           # pheromone deposit factor
+TAU_MIN = 0.1
+TAU_MAX = 100.0
+
+# Exploration parameters
+INITIAL_EPSILON = 0.45
+MIN_EPSILON = 0.05
+DECAY_RATE = 0.999962
+EPSILON = INITIAL_EPSILON
+
+# Speed parameters
+DEFAULT_SANTA_SPEED_KMPH = 11500
+MIN_SPEED = 10.0
+MAX_SPEED = 15000.0
+
+# Physical constants
+AIR_DENSITY = 1.225    # kg/m³
+CROSS_SECTIONAL_AREA = 1.0  # fallback (m²)
+T_NORM = 108000.0
+W_NORM = 1e13
+LATE_PENALTY = 2.10e100
+
+# Time buffers
+SUNRISE_BUFFER = timedelta(minutes=15)
+SUNSET_BUFFER = timedelta(minutes=15)
+
+# ==============================================================================
+# CITY DATA (with population) AND VALIDATION
+# ==============================================================================
+cities: List[Dict[str, Any]] = [
+
+    {'name': 'Suva', 'lat': -18.1248, 'lon': 178.4501, 'tz_offset': 12,
+     'sunrise': '05:35', 'sunset': '18:45', 'population': 93970},
+
+    {'name': 'Canberra', 'lat': -35.2809, 'lon': 149.1300, 'tz_offset': 10,
+     'sunrise': '05:45', 'sunset': '20:15', 'population': 453558},
+
+    {'name': 'Auckland', 'lat': -36.8485, 'lon': 174.7633, 'tz_offset': 12,
+     'sunrise': '05:55', 'sunset': '20:40', 'population': 1623000},
+
+    {'name': 'Wellington', 'lat': -41.2865, 'lon': 174.7762, 'tz_offset': 12,
+     'sunrise': '05:45', 'sunset': '20:55', 'population': 215400},
+
+    {'name': 'Tokyo', 'lat': 35.6895, 'lon': 139.6917, 'tz_offset': 9,
+     'sunrise': '06:48', 'sunset': '16:32', 'population': 37400068},
+
+    {'name': 'Seoul', 'lat': 37.5665, 'lon': 126.9780, 'tz_offset': 9,
+     'sunrise': '07:45', 'sunset': '17:15', 'population': 9746000},
+
+    {'name': 'Beijing', 'lat': 39.9042, 'lon': 116.4074, 'tz_offset': 8,
+     'sunrise': '07:32', 'sunset': '16:53', 'population': 21540000},
+
+    {'name': 'Shanghai', 'lat': 31.2304, 'lon': 121.4737, 'tz_offset': 8,
+     'sunrise': '06:45', 'sunset': '16:55', 'population': 24870000},
+
+    {'name': 'Singapore', 'lat': 1.3521, 'lon': 103.8198, 'tz_offset': 8,
+     'sunrise': '07:00', 'sunset': '19:00', 'population': 5453600},
+
+    {'name': 'Nairobi', 'lat': -1.2921, 'lon': 36.8219, 'tz_offset': 3,
+     'sunrise': '06:25', 'sunset': '18:40', 'population': 4397000},
+
+    {'name': 'Delhi', 'lat': 28.7041, 'lon': 77.1025, 'tz_offset': 5.5,
+     'sunrise': '07:10', 'sunset': '17:26', 'population': 31000000},
+
+    {'name': 'Mumbai', 'lat': 19.0760, 'lon': 72.8777, 'tz_offset': 5.5,
+     'sunrise': '06:20', 'sunset': '18:50', 'population': 12478447},
+
+    {'name': 'Dubai', 'lat': 25.2048, 'lon': 55.2708, 'tz_offset': 4,
+     'sunrise': '06:45', 'sunset': '17:40', 'population': 3331400},
+
+    {'name': 'Cairo', 'lat': 30.0444, 'lon': 31.2357, 'tz_offset': 2,
+     'sunrise': '06:45', 'sunset': '17:00', 'population': 9500000},
+
+    {'name': 'Lagos', 'lat': 6.5244, 'lon': 3.3792, 'tz_offset': 1,
+     'sunrise': '06:39', 'sunset': '18:33', 'population': 14368000},
+
+    {'name': 'Cape Town', 'lat': -33.9249, 'lon': 18.4241, 'tz_offset': 2,
+     'sunrise': '05:30', 'sunset': '19:55', 'population': 433688},
+
+    {'name': 'Johannesburg', 'lat': -26.2041, 'lon': 28.0473, 'tz_offset': 2,
+     'sunrise': '05:15', 'sunset': '19:15', 'population': 957441},
+
+    {'name': 'Moscow', 'lat': 55.7558, 'lon': 37.6173, 'tz_offset': 3,
+     'sunrise': '08:58', 'sunset': '15:58', 'population': 12500000},
+
+    {'name': 'Vilnius', 'lat': 54.6872, 'lon': 25.2797, 'tz_offset': 2,
+     'sunrise': '08:40', 'sunset': '15:50', 'population': 580020},
+
+    {'name': 'Oslo', 'lat': 59.9139, 'lon': 10.7522, 'tz_offset': 1,
+     'sunrise': '09:15', 'sunset': '15:15', 'population': 681067},
+
+    {'name': 'London', 'lat': 51.5074, 'lon': -0.1278, 'tz_offset': 0,
+     'sunrise': '08:04', 'sunset': '15:54', 'population': 8982000},
+
+    {'name': 'Lisbon', 'lat': 38.7223, 'lon': -9.1393, 'tz_offset': 0,
+     'sunrise': '07:45', 'sunset': '17:30', 'population': 504718},
+
+    {'name': 'Madrid', 'lat': 40.4168, 'lon': -3.7038, 'tz_offset': 1,
+     'sunrise': '08:35', 'sunset': '17:55', 'population': 3223000},
+
+    {'name': 'Paris', 'lat': 48.8566, 'lon': 2.3522, 'tz_offset': 1,
+     'sunrise': '08:45', 'sunset': '16:55', 'population': 2161000},
+
+    {'name': 'Berlin', 'lat': 52.5200, 'lon': 13.4050, 'tz_offset': 1,
+     'sunrise': '08:15', 'sunset': '16:00', 'population': 3644826},
+
+    {'name': 'Chicago', 'lat': 41.8781, 'lon': -87.6298, 'tz_offset': -6,
+     'sunrise': '07:15', 'sunset': '16:30', 'population': 2716000},
+
+    {'name': 'Washington, D.C.', 'lat': 38.9072, 'lon': -77.0369, 'tz_offset': -5,
+     'sunrise': '07:25', 'sunset': '16:50', 'population': 702455},
+
+    {'name': 'New York City', 'lat': 40.7128, 'lon': -74.0060, 'tz_offset': -5,
+     'sunrise': '07:20', 'sunset': '16:35', 'population': 8336817},
+
+    {'name': 'Toronto', 'lat': 43.6532, 'lon': -79.3832, 'tz_offset': -5,
+     'sunrise': '07:45', 'sunset': '16:45', 'population': 2930000},
+
+    {'name': 'Ottawa', 'lat': 45.4215, 'lon': -75.6972, 'tz_offset': -5,
+     'sunrise': '07:35', 'sunset': '16:25', 'population': 1017449},
+
+    {'name': 'Santiago', 'lat': -33.4489, 'lon': -70.6693, 'tz_offset': -4,
+     'sunrise': '06:30', 'sunset': '20:45', 'population': 5743719},
+
+    {'name': 'Buenos Aires', 'lat': -34.6037, 'lon': -58.3816, 'tz_offset': -3,
+     'sunrise': '05:40', 'sunset': '20:05', 'population': 2890151},
+
+    {'name': 'Montevideo', 'lat': -34.9011, 'lon': -56.1645, 'tz_offset': -3,
+     'sunrise': '05:45', 'sunset': '20:10', 'population': 1380000},
+
+    {'name': 'São Paulo', 'lat': -23.5505, 'lon': -46.6333, 'tz_offset': -3,
+     'sunrise': '05:30', 'sunset': '19:00', 'population': 12330000},
+
+    {'name': 'Rio de Janeiro', 'lat': -22.9068, 'lon': -43.1729, 'tz_offset': -3,
+     'sunrise': '05:35', 'sunset': '19:05', 'population': 6747000},
+
+    {'name': 'Brasília', 'lat': -15.7939, 'lon': -47.8828, 'tz_offset': -3,
+     'sunrise': '05:45', 'sunset': '18:45', 'population': 3055149},
+
+    {'name': 'Bogotá', 'lat': 4.7110, 'lon': -74.0721, 'tz_offset': -5,
+     'sunrise': '05:55', 'sunset': '17:55', 'population': 7743955},
+
+    {'name': 'St. Georges', 'lat': 12.0561, 'lon': -61.7486, 'tz_offset': -4,
+     'sunrise': '06:25', 'sunset': '17:50', 'population': 33734},
+
+    {'name': 'Mexico City', 'lat': 19.4326, 'lon': -99.1332, 'tz_offset': -6,
+     'sunrise': '07:05', 'sunset': '17:55', 'population': 21581000},
+
+    {'name': 'Los Angeles', 'lat': 34.0522, 'lon': -118.2437, 'tz_offset': -8,
+     'sunrise': '06:55', 'sunset': '16:50', 'population': 3980400},
+
+    {'name': 'North Pole', 'lat': 90.0000, 'lon': 0.0000, 'tz_offset': 0,
+     'sunrise': '00:00', 'sunset': '23:59', 'population': 0},
+]
+
+NUM_CITIES = len(cities)
+
+
+def validate_cities(city_list: List[Dict[str, Any]]) -> None:
+    required_keys = {"name", "lat", "lon", "tz_offset", "sunrise", "sunset", "population"}
+    for city in city_list:
+        if not required_keys.issubset(city.keys()):
+            raise ValueError(f"City data missing keys: {city}")
+validate_cities(cities)
+
+TOTAL_POPULATION = sum(city['population'] for city in cities)
+CITY_POP_MAP = {city['name']: city['population'] for city in cities}
+
+# ==============================================================================
+# DISTANCE AND SPEED MATRICES
+# ==============================================================================
+def haversine_vectorized(coords: np.ndarray) -> np.ndarray:
+    R = 6371.0  # Earth's radius in km
+    lat_rad = np.radians(coords[:, 0])
+    lon_rad = np.radians(coords[:, 1])
+    dlat = lat_rad.reshape(-1, 1) - lat_rad.reshape(1, -1)
+    dlon = lon_rad.reshape(-1, 1) - lon_rad.reshape(1, -1)
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat_rad).reshape(-1, 1) * np.cos(lat_rad).reshape(1, -1) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arcsin(np.sqrt(a))
+    return R * c
+
+city_coords = np.array([(city['lat'], city['lon']) for city in cities])
+distance_matrix = haversine_vectorized(city_coords)
+np.fill_diagonal(distance_matrix, np.inf)
+
+speed_matrix = np.full((NUM_CITIES, NUM_CITIES), DEFAULT_SANTA_SPEED_KMPH)
+pheromone_matrix = np.full((NUM_CITIES, NUM_CITIES), 1.0)
+
+# ==============================================================================
+# TIME/DATE UTILITY FUNCTIONS
+# ==============================================================================
+def get_local_datetime(date_obj: datetime.date, time_str: str) -> datetime:
+    return datetime.combine(date_obj, datetime.strptime(time_str, '%H:%M').time())
+
+def get_city_index_by_name(name: str) -> int:
+    for i, c in enumerate(cities):
+        if c["name"] == name:
+            return i
+    raise ValueError(f"City not found: {name}")
+
+def get_easternmost_city_index(exclude_names: Optional[set] = None) -> int:
+    exclude_names = exclude_names or set()
+    candidates = [(i, c["lon"]) for i, c in enumerate(cities) if c["name"] not in exclude_names]
+    if not candidates:
+        raise ValueError("No candidate cities to choose from for easternmost city.")
+    # max longitude = easternmost (works fine with your dataset where Suva/Auckland are high +lon)
+    return max(candidates, key=lambda x: x[1])[0]
+
+
+def format_timedelta(td: timedelta) -> str:
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes = remainder // 60
+    return f"{hours} hours {minutes} minutes"
+
+def get_darkness_window(city: Dict[str, Any]) -> Tuple[datetime, datetime]:
+    if city['name'] == "North Pole":
+        return datetime.min, datetime.max
+    sunset_date = datetime(2024, 12, 24)
+    sunrise_date = datetime(2024, 12, 25)
+    sunset_local = get_local_datetime(sunset_date.date(), city['sunset']) + SUNSET_BUFFER
+    sunrise_local = get_local_datetime(sunrise_date.date(), city['sunrise']) - SUNRISE_BUFFER
+    return sunset_local, sunrise_local
+
+def adjust_arrival_time(city: Dict[str, Any], arrival_utc: datetime) -> Tuple[Optional[datetime], timedelta]:
+    tz_offset = timedelta(hours=city['tz_offset'])
+    arrival_local = arrival_utc + tz_offset
+    if city['name'] == "North Pole":
+        return arrival_utc, timedelta(0)
+    sd = datetime(2024, 12, 24).date()
+    sr = datetime(2024, 12, 25).date()
+    official_sunset = get_local_datetime(sd, city['sunset']) + SUNSET_BUFFER
+    official_sunrise = get_local_datetime(sr, city['sunrise']) - SUNRISE_BUFFER
+    if official_sunset <= arrival_local < official_sunrise:
+        return arrival_utc, timedelta(0)
+    if arrival_local < official_sunset:
+        adjusted_local = official_sunset
+    else:
+        return arrival_utc, timedelta(0)
+    adjusted_utc = adjusted_local - tz_offset
+    wait_time = adjusted_utc - arrival_utc
+    return adjusted_utc, wait_time
+
+def is_dark_during_departure(city: Dict[str, Any], departure_utc: datetime) -> bool:
+    if city['name'] == "North Pole":
+        return True
+    tz_offset = timedelta(hours=city['tz_offset'])
+    departure_local = departure_utc + tz_offset
+    dep_date = departure_local.date()
+    sunset_local = get_local_datetime(dep_date, city['sunset'])
+    sunrise_next = get_local_datetime(dep_date + timedelta(days=1), city['sunrise'])
+    if sunset_local <= departure_local < sunrise_next:
+        return True
+    if departure_local < sunset_local:
+        prev_sunset = get_local_datetime(dep_date - timedelta(days=1), city['sunset'])
+        return prev_sunset <= departure_local
+    return False
+
+# ==============================================================================
+# DYNAMIC CROSS-SECTIONAL AREA & SPEED LOGIC
+# ==============================================================================
+def get_dynamic_cross_sectional_area(visited_pop: float) -> float:
+    if TOTAL_POPULATION <= 0:
+        return CROSS_SECTIONAL_AREA
+    fraction_remaining = max(0.0, (TOTAL_POPULATION - visited_pop) / TOTAL_POPULATION)
+    return 0.001 + 0.999 * fraction_remaining
+
+def get_dynamic_santa_speed(from_idx: int, to_idx: int, departure_utc: datetime) -> float:
+    default_speed = speed_matrix[from_idx][to_idx]
+    dist = distance_matrix[from_idx][to_idx]
+    if dist in [float('inf'), 0]:
+        return default_speed
+    tz = timedelta(hours=cities[to_idx]['tz_offset'])
+    departure_local = departure_utc + tz
+    sunset_local, sunrise_local = get_darkness_window(cities[to_idx])
+    travel_time = timedelta(hours=dist / default_speed)
+    arrival_local = departure_local + travel_time
+    if sunset_local <= arrival_local < sunrise_local:
+        return default_speed
+    if arrival_local < sunset_local:
+        required_time = sunset_local - departure_local
+        req_speed = dist / (required_time.total_seconds() / 3600)
+        return max(MIN_SPEED, min(req_speed, MAX_SPEED))
+    if arrival_local >= sunrise_local:
+        required_time = sunrise_local - departure_local
+        if required_time.total_seconds() <= 0:
+            return default_speed
+        req_speed = dist / (required_time.total_seconds() / 3600)
+        return max(MIN_SPEED, min(req_speed, MAX_SPEED))
+    return default_speed
+
+# ==============================================================================
+# PLOTTING AND CSV EXPORT FUNCTIONS
+# ==============================================================================
+def export_tour_to_csv(journey: List[Dict[str, Any]], filename: str) -> None:
+    if not journey:
+        logging.warning("No journey details to export.")
+        return
+    keys = journey[0].keys()
+    try:
+        with open(filename, mode="w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=keys)
+            writer.writeheader()
+            for leg in journey:
+                writer.writerow(leg)
+        logging.info(f"Tour details exported to {filename}")
+    except Exception as e:
+        logging.error(f"Failed to export CSV: {e}")
+
+def export_route_coordinates_to_csv(tour: List[int], filename: str) -> None:
+    try:
+        with open(filename, mode="w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=['Order', 'City', 'Latitude', 'Longitude'])
+            writer.writeheader()
+            for i, idx in enumerate(tour):
+                c = cities[idx]
+                writer.writerow({
+                    'Order': i+1,
+                    'City': c['name'],
+                    'Latitude': c['lat'],
+                    'Longitude': c['lon']
+                })
+        logging.info(f"Route coordinates exported to {filename}")
+    except Exception as e:
+        logging.error(f"Failed to export route coordinates CSV: {e}")
+
+def plot_convergence_curve(x: List[Any], y: List[Any], xlabel: str, ylabel: str, title: str, filename: str) -> None:
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, marker="o")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
+
+def plot_dual_convergence_curve_triple(
+    x: List[Any],
+    y1: List[float],
+    y2: List[float],
+    y3: List[float],
+    label1: str,
+    label2: str,
+    label3: str,
+    title: str,
+    filename: str
+) -> None:
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    # X + Primary Y Axis
+    ax1.set_xlabel("Iteration")
+    ax1.set_ylabel(label1)
+    l1 = ax1.plot(x, y1, marker="o", label=label1)
+
+    # Log scale applied to left Y-axis
+    ax1.set_yscale("log")
+
+    # Secondary Y Axis
+    ax2 = ax1.twinx()
+    ax2.set_ylabel(label3)
+    l3 = ax2.plot(x, y3, marker="o", label=label3, color="red")
+
+    # Legend handling
+    lines = l1 + l3
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc="upper left")
+
+    plt.title(title)
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
+
+
+def plot_tour(tour: List[int],
+              tour_length: float,
+              total_time_hours: float,
+              waiting_hours: float,
+              filename: str) -> None:
+    """
+    Draws the best tour on a lat/lon plot with arrows between cities,
+    titled with total length, total time, and waiting time.
+    """
+    plt.figure(figsize=(12, 6))
+    coords = [city_coords[i] for i in tour] + [city_coords[tour[0]]]
+    arr = np.array(coords)
+    plt.plot(arr[:, 1], arr[:, 0], 'o-', color='red')
+    for i in range(len(tour)):
+        frm = arr[i]
+        to = arr[(i + 1) % len(tour)]
+        plt.annotate('', xy=(to[1], to[0]), xytext=(frm[1], frm[0]),
+                     arrowprops=dict(arrowstyle='->', lw=1.5, color='gray'))
+        plt.text(frm[1], frm[0], cities[tour[i]]['name'],
+                 fontsize=9, ha='right', va='bottom')
+    plt.title(f"Best Tour: {tour_length:.2f} km, Total Time: {total_time_hours:.2f} hrs, Waiting: {waiting_hours:.2f} hrs")
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
+
+def plot_leg_chart(x: List[int], y: List[float], xlabel: str, ylabel: str, title: str, filename: str) -> None:
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, marker='o', linestyle='-')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.xticks(x)
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
+
+def plot_heatmap(matrix: np.ndarray, title: str, filename: str) -> None:
+    plt.figure(figsize=(8, 6))
+    plt.imshow(matrix, cmap='hot', interpolation='nearest')
+    plt.colorbar(label=title)
+    plt.title(title)
+    plt.xlabel('City Index')
+    plt.ylabel('City Index')
+    plt.savefig(filename)
+    plt.close()
+
+def plot_decision_heatmap(decision_histories: List[List[int]], filename: str) -> None:
+    if not decision_histories:
+        return
+    max_len = max(len(h) for h in decision_histories)
+    data = np.array([h + [np.nan] * (max_len - len(h)) for h in decision_histories])
+    plt.figure(figsize=(10, 6))
+    plt.imshow(data, aspect='auto', cmap='viridis', interpolation='nearest')
+    plt.colorbar(label='Decision (0=explore, 1=exploit)')
+    plt.title('Ant Decision History Heatmap')
+    plt.xlabel('Step')
+    plt.ylabel('Ant Index')
+    plt.savefig(filename)
+    plt.close()
+
+def animate_tour(best_tour: List[int], departure_datetime_utc: datetime, filename: str) -> None:
+    coords = np.array([city_coords[i] for i in best_tour] + [city_coords[best_tour[0]]])
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.set_title('Animated Santa Tour')
+    ax.set_xlabel('Longitude')
+    ax.set_ylabel('Latitude')
+    ln, = ax.plot([], [], 'ro-', lw=2)
+
+    def init():
+        ax.set_xlim(coords[:, 1].min() - 5, coords[:, 1].max() + 5)
+        ax.set_ylim(coords[:, 0].min() - 5, coords[:, 0].max() + 5)
+        return ln,
+
+    def update(frame):
+        ln.set_data(coords[:frame + 1, 1], coords[:frame + 1, 0])
+        return ln,
+
+    ani = animation.FuncAnimation(fig, update, frames=len(coords),
+                                  init_func=init, blit=True, repeat=False)
+
+    try:
+        # try mp4 via ffmpeg
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=2, metadata={'artist': 'SantaACO'})
+        ani.save(filename, writer=writer)
+    except (KeyError, RuntimeError):
+        # fallback to GIF if ffmpeg not available
+        logging.warning("ffmpeg writer not available—falling back to GIF via PillowWriter")
+        from matplotlib.animation import PillowWriter
+        gif_path = filename.rsplit('.', 1)[0] + '.gif'
+        writer = PillowWriter(fps=2)
+        ani.save(gif_path, writer=writer)
+
+    plt.close()
+
+
+def plot_gantt_tour(journey: List[Dict[str, Any]], filename: str) -> None:
+    """
+    Gantt chart of Santa’s tour:
+      - Gray bands = darkness windows (UTC)
+      - Colored bars = travel (black=night arrival, yellow=day arrival)
+      - Red '×' marks the exact arrival time
+    """
+    if not journey:
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    n = len(journey)
+    for i, leg in enumerate(journey):
+        # parse departure & arrival in UTC
+        dep = datetime.strptime(leg['Departure UTC'], '%Y-%m-%d %H:%M:%S')
+        arr = datetime.strptime(leg['Arrival UTC'],   '%Y-%m-%d %H:%M:%S')
+
+        # find this city’s darkness window in UTC
+        city = next(c for c in cities if c['name'] == leg['To City'])
+        if city['name'] != 'North Pole':
+            ds_local, de_local = get_darkness_window(city)
+            tz = timedelta(hours=city['tz_offset'])
+            ds_utc = ds_local - tz
+            de_utc = de_local - tz
+
+        # 1) shade the darkness window
+        #    width in hours → convert to days for datetime axis
+        width_days = (de_utc - ds_utc) / timedelta(days=1)
+        ax.barh(i, width_days, left=mdates.date2num(ds_utc),
+                height=0.8, color='lightgray', alpha=0.5)
+
+        # 2) draw the travel bar (width in days)
+        travel_days = (arr - dep) / timedelta(days=1)
+        color = 'black' if leg['Is Dark Upon Arrival'] == 'Yes' else 'yellow'
+        ax.barh(i, travel_days, left=mdates.date2num(dep),
+                height=0.5, color=color)
+
+        # 3) mark the exact arrival time
+        ax.plot(mdates.date2num(arr), i, marker='x', color='red', markersize=8)
+
+        # label
+        ax.text(mdates.date2num(arr + timedelta(hours=0.1)), i,
+                leg['To City'], va='center', fontsize=9)
+
+    # format x-axis as dates
+    ax.xaxis_date()
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M\n%b %d'))
+    fig.autofmt_xdate()
+
+    ax.set_xlabel('UTC Time')
+    ax.set_ylabel('Leg Index')
+    ax.set_title('Gantt Chart of Santa’s Tour')
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+
+def plot_population_coverage(journey: List[Dict[str, Any]], filename: str) -> None:
+    pops = [CITY_POP_MAP[leg['To City']] for leg in journey]
+    cum = np.cumsum(pops)
+    perc = cum / TOTAL_POPULATION * 100
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, len(perc) + 1), perc, marker='o')
+    plt.xlabel('Leg Number')
+    plt.ylabel('Cumulative Population Covered (%)')
+    plt.title('Population Coverage Over Tour')
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
+
+# ==============================================================================
+# ANT COLONY OPTIMIZATION CLASS
+# ==============================================================================
+class Ant:
+    def __init__(self, start_city: int, start_time_utc: datetime) -> None:
+        self.start_city = start_city
+        self.current_city = start_city
+        self.tour: List[int] = [start_city]
+        self.allowed_cities: List[int] = [i for i in range(NUM_CITIES) if i != start_city]
+        self.pending_cities: List[int] = []
+        self.tour_length = 0.0
+        self.total_time_cost = timedelta(0)
+        self.waiting_time = timedelta(0)
+        self.time_elapsed = start_time_utc
+        self.total_work = 0.0
+        self.total_effective_cost = 0.0
+        self.visited_population = 0.0
+        self.decision_history: List[int] = []  # 1=pheromone-exploit, 0=random-explore
+
+    def calculate_travel_time(self, frm: int, to: int) -> timedelta:
+        dist = distance_matrix[frm][to]
+        if dist in [float('inf'), 0]:
+            return timedelta(0)
+        sp = get_dynamic_santa_speed(frm, to, self.time_elapsed)
+        return timedelta(hours=dist / sp)
+
+    def select_next_city(self, pheromone_matrix: np.ndarray) -> Optional[int]:
+        candidate_info = {}
+        feasible = []
+        for idx in self.allowed_cities:
+            travel = self.calculate_travel_time(self.current_city, idx)
+            arrival = self.time_elapsed + travel
+            adjusted, wait = adjust_arrival_time(cities[idx], arrival)
+            effective_arrival = adjusted if adjusted else arrival
+            arrival_local = effective_arrival + timedelta(hours=cities[idx]['tz_offset'])
+            sunset_local, sunrise_local = get_darkness_window(cities[idx])
+            is_feasible = (arrival_local >= sunset_local) and (arrival_local < sunrise_local)
+
+            dist_km = distance_matrix[self.current_city][idx]
+            dist_m = dist_km * 1000.0
+            speed = get_dynamic_santa_speed(self.current_city, idx, self.time_elapsed)
+            speed_mps = speed * (1000.0 / 3600.0)
+
+            dyn_area = get_dynamic_cross_sectional_area(self.visited_population)
+            work_cost = 0.5 * AIR_DENSITY * dyn_area * (speed_mps ** 2) * dist_m
+            darkness_bonus = 0.9 if is_feasible else 1.0
+            eff_cost = work_cost * darkness_bonus
+            if not is_feasible:
+                eff_cost += LATE_PENALTY
+
+            candidate_info[idx] = {'effective_cost': eff_cost}
+            feasible.append(idx)
+
+        if not feasible:
+            return None
+
+        etas = {}
+        denom = 0.0
+        for idx in feasible:
+            tau = pheromone_matrix[self.current_city][idx] ** ALPHA
+            eta = (1.0 / candidate_info[idx]['effective_cost']) ** BETA if candidate_info[idx]['effective_cost'] > 0 else 0.0
+            etas[idx] = eta
+            denom += tau * eta
+
+        if np.random.rand() < EPSILON:
+            self.decision_history.append(0)
+            return np.random.choice(feasible)
+        else:
+            self.decision_history.append(1)
+            probs = [(pheromone_matrix[self.current_city][idx] ** ALPHA * etas[idx]) / denom if denom > 0 else 0.0
+                     for idx in feasible]
+            return np.random.choice(feasible, p=probs)
+
+    def move_to_city(self, next_city: int) -> bool:
+        travel = self.calculate_travel_time(self.current_city, next_city)
+        arrival = self.time_elapsed + travel
+        adjusted, wait = adjust_arrival_time(cities[next_city], arrival)
+        if adjusted is None:
+            self.pending_cities.append(next_city)
+            self.allowed_cities.remove(next_city)
+            return False
+
+        dist_km = distance_matrix[self.current_city][next_city]
+        dist_m = dist_km * 1000.0
+        speed = get_dynamic_santa_speed(self.current_city, next_city, self.time_elapsed)
+        speed_mps = speed * (1000.0 / 3600.0)
+        dyn_area = get_dynamic_cross_sectional_area(self.visited_population)
+        work_joules = 0.5 * AIR_DENSITY * dyn_area * (speed_mps ** 2) * dist_m
+
+        self.total_work += work_joules
+        self.time_elapsed = adjusted
+        self.total_time_cost += (travel + wait)
+        self.waiting_time += wait
+        self.tour.append(next_city)
+        self.allowed_cities.remove(next_city)
+        self.tour_length += dist_km
+        self.current_city = next_city
+
+        self.visited_population += cities[next_city]['population']
+        return True
+
+    def complete_tour(self) -> bool:
+        travel = self.calculate_travel_time(self.current_city, self.start_city)
+        arrival = self.time_elapsed + travel
+        adjusted, wait = adjust_arrival_time(cities[self.start_city], arrival)
+        if adjusted is None:
+            return False
+
+        dist_km = distance_matrix[self.current_city][self.start_city]
+        dist_m = dist_km * 1000.0
+        speed = get_dynamic_santa_speed(self.current_city, self.start_city, self.time_elapsed)
+        speed_mps = speed * (1000.0 / 3600.0)
+        dyn_area = get_dynamic_cross_sectional_area(self.visited_population)
+        work_joules = 0.5 * AIR_DENSITY * dyn_area * (speed_mps ** 2) * dist_m
+
+        self.total_work += work_joules
+        self.time_elapsed = adjusted
+        self.total_time_cost += (travel + wait)
+        self.waiting_time += wait
+        self.tour.append(self.start_city)
+        self.tour_length += dist_km
+        self.current_city = self.start_city
+        return True
+
+# ==============================================================================
+# JOURNEY SIMULATION & UTILITY FUNCTIONS
+# ==============================================================================
+def simulate_best_tour(best_tour: List[int], departure_datetime_utc: datetime) -> Optional[List[Dict[str, Any]]]:
+    if not best_tour:
+        logging.warning("No feasible tour found.")
+        return None
+
+    current_time = departure_datetime_utc
+    journey_details: List[Dict[str, Any]] = []
+    visited_pop = 0.0
+
+    for frm, to in zip(best_tour, best_tour[1:]):
+        dist_km = distance_matrix[frm][to]
+        speed = get_dynamic_santa_speed(frm, to, current_time)
+        travel = timedelta(hours=dist_km / speed)
+        arrival = current_time + travel
+        adjusted, wait = adjust_arrival_time(cities[to], arrival)
+        if adjusted is None:
+            logging.error(f"Cannot adjust arrival for {cities[to]['name']}.")
+            return None
+
+        arrival_local = adjusted + timedelta(hours=cities[to]['tz_offset'])
+        is_dark = (arrival_local >= get_darkness_window(cities[to])[0] and
+                   arrival_local < get_darkness_window(cities[to])[1])
+
+        dyn_area = get_dynamic_cross_sectional_area(visited_pop)
+        speed_mps = speed * (1000.0 / 3600.0)
+        work_cost = 0.5 * AIR_DENSITY * dyn_area * (speed_mps ** 2) * (dist_km * 1000.0)
+        effective_cost = work_cost * (0.9 if is_dark else 1.0) + (0 if is_dark else LATE_PENALTY)
+
+        journey_details.append({
+            'From City': cities[frm]['name'],
+            'To City': cities[to]['name'],
+            'Distance (km)': round(dist_km, 2),
+            'Speed (km/h)': round(speed, 2),
+            'Travel Time (h)': round(travel.total_seconds() / 3600.0, 2),
+            'Wait Time (h)': round(wait.total_seconds() / 3600.0, 2),
+            'Departure UTC': current_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'Departure Local': (current_time + timedelta(hours=cities[frm]['tz_offset'])).strftime('%Y-%m-%d %H:%M:%S'),
+            'Arrival UTC': adjusted.strftime('%Y-%m-%d %H:%M:%S'),
+            'Arrival Local': arrival_local.strftime('%Y-%m-%d %H:%M:%S'),
+            'Wait Time': format_timedelta(wait),
+            'Is Dark Upon Arrival': 'Yes' if is_dark else 'No',
+            'Is Dark Upon Departure': 'Yes' if is_dark_during_departure(cities[frm], current_time) else 'No',
+            'Work (J)': round(work_cost, 2),
+            'Effective Cost (J)': round(effective_cost, 2)
+        })
+
+        current_time = adjusted
+        visited_pop += cities[to]['population']
+
+    return journey_details
+
+def compute_total_work(journey_details: List[Dict[str, Any]]) -> float:
+    return sum(leg["Work (J)"] for leg in journey_details)
+
+def compute_total_effective_cost(journey_details: List[Dict[str, Any]]) -> float:
+    return sum(leg["Effective Cost (J)"] for leg in journey_details)
+
+def run_unit_tests():
+    coords = np.array([[0, 0], [0, 0]])
+    d = haversine_vectorized(coords)
+    assert np.allclose(d, [[0, 0], [0, 0]], atol=1e-6), "haversine_vectorized failed for identical points"
+    logging.info("Unit test passed: haversine_vectorized")
+
+    arrival = datetime(2024, 12, 24, 12, 0)
+    adjusted, wait = adjust_arrival_time(cities[0], arrival)
+    assert adjusted == arrival and wait == timedelta(0), "adjust_arrival_time failed for North Pole"
+    logging.info("Unit test passed: adjust_arrival_time for North Pole")
+
+# ==============================================================================
+# MAIN EXECUTION
+# ==============================================================================
+def main() -> None:
+    global pheromone_matrix, EPSILON, DEFAULT_SANTA_SPEED_KMPH, speed_matrix
+
+    # Parameter loading
+    def load_parameters(param_file: str = "aco_params.json") -> None:
+        global ALPHA, BETA, RHO, Q, TAU_MIN, TAU_MAX, INITIAL_EPSILON, MIN_EPSILON, DECAY_RATE, \
+               DEFAULT_SANTA_SPEED_KMPH, MIN_SPEED, MAX_SPEED, LATE_PENALTY
+        if os.path.exists(param_file):
+            try:
+                with open(param_file, "r") as f:
+                    params = json.load(f)
+                ALPHA = params.get("ALPHA", ALPHA)
+                BETA = params.get("BETA", BETA)
+                RHO = params.get("RHO", RHO)
+                Q = params.get("Q", Q)
+                TAU_MIN = params.get("TAU_MIN", TAU_MIN)
+                TAU_MAX = params.get("TAU_MAX", TAU_MAX)
+                INITIAL_EPSILON = params.get("INITIAL_EPSILON", INITIAL_EPSILON)
+                MIN_EPSILON = params.get("MIN_EPSILON", MIN_EPSILON)
+                DECAY_RATE = params.get("DECAY_RATE", DECAY_RATE)
+                DEFAULT_SANTA_SPEED_KMPH = params.get("DEFAULT_SANTA_SPEED_KMPH", DEFAULT_SANTA_SPEED_KMPH)
+                MIN_SPEED = params.get("MIN_SPEED", MIN_SPEED)
+                MAX_SPEED = params.get("MAX_SPEED", MAX_SPEED)
+                LATE_PENALTY = params.get("LATE_PENALTY", LATE_PENALTY)
+                logging.info("ACO parameters loaded from %s", param_file)
+            except Exception as e:
+                logging.error("Failed to load parameters: %s", e)
+        else:
+            logging.info("Parameter file not found. Using defaults.")
+
+    load_parameters()
+    run_unit_tests()
+
+    os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
+    north_pole_index = get_city_index_by_name("North Pole")
+
+    # Always start at the North Pole
+    start_city_index = north_pole_index
+    departure_datetime_utc = datetime(2024, 12, 24, 0, 0)
+
+    logging.info(f"Start city: {cities[start_city_index]['name']}")
+    logging.info(f"Departure time (UTC): {departure_datetime_utc}")
+
+    best_tour: Optional[List[int]] = None
+    best_length = np.inf
+    best_time_cost = timedelta.max
+    best_waiting_time = timedelta(0)
+    best_total_effective_cost = np.inf
+
+    best_lengths: List[float] = []
+    best_works: List[float] = []
+    best_travel_times: List[float] = []
+    EPSILON = INITIAL_EPSILON
+
+    for iteration in range(NUM_ITERATIONS):
+        EPSILON = max(INITIAL_EPSILON * (DECAY_RATE ** iteration), MIN_EPSILON)
+        ants = [Ant(start_city=start_city_index, start_time_utc=departure_datetime_utc) for _ in range(NUM_ANTS)]
+
+        # Build tours
+        for ant in ants:
+            while ant.allowed_cities or ant.pending_cities:
+                if not ant.allowed_cities and ant.pending_cities:
+                    ant.allowed_cities = ant.pending_cities.copy()
+                    ant.pending_cities = []
+                next_city = ant.select_next_city(pheromone_matrix)
+                if next_city is None:
+                    break
+                ant.move_to_city(next_city)
+            if ant.complete_tour():
+                journey_fwd = simulate_best_tour(ant.tour, departure_datetime_utc)
+                cost_fwd = compute_total_effective_cost(journey_fwd) if journey_fwd else np.inf
+                rev_tour = ant.tour[::-1]
+                journey_rev = simulate_best_tour(rev_tour, departure_datetime_utc)
+                cost_rev = compute_total_effective_cost(journey_rev) if journey_rev else np.inf
+                if cost_rev < cost_fwd:
+                    ant.tour = rev_tour
+                    ant.total_effective_cost = cost_rev
+                    total_tt = sum(leg["Travel Time (h)"] for leg in journey_rev)
+                    total_wt = sum(leg["Wait Time (h)"] for leg in journey_rev)
+                    ant.total_time_cost = timedelta(hours=total_tt + total_wt)
+                    ant.waiting_time = timedelta(hours=total_wt)
+                    ant.tour_length = sum(distance_matrix[ant.tour[i]][ant.tour[i+1]] for i in range(len(ant.tour)-1))
+                else:
+                    ant.total_effective_cost = cost_fwd
+
+                if ant.total_effective_cost < best_total_effective_cost:
+                    best_tour = ant.tour.copy()
+                    best_length = ant.tour_length
+                    best_time_cost = ant.total_time_cost
+                    best_waiting_time = ant.waiting_time
+                    best_total_effective_cost = ant.total_effective_cost
+
+        # Pheromone evaporation
+        dynamic_RHO = RHO * (1 - iteration / NUM_ITERATIONS)
+        pheromone_matrix *= (1 - dynamic_RHO)
+        # Pheromone deposit by ants
+        for ant in ants:
+            if ant.tour_length > 0:
+                norm_work = ant.total_work / W_NORM
+                deposit = Q / (norm_work + 1e-6)
+                for i in range(len(ant.tour) - 1):
+                    frm, to = ant.tour[i], ant.tour[i+1]
+                    pheromone_matrix[frm][to] += deposit
+                    pheromone_matrix[to][frm] += deposit
+        # Global best deposit
+        if best_tour:
+            norm_work = best_total_effective_cost / W_NORM
+            deposit = Q / (norm_work + 1e-6)
+            for i in range(len(best_tour) - 1):
+                frm, to = best_tour[i], best_tour[i+1]
+                pheromone_matrix[frm][to] += deposit
+                pheromone_matrix[to][frm] += deposit
+
+        np.clip(pheromone_matrix, TAU_MIN, TAU_MAX, out=pheromone_matrix)
+
+        # ---- save pheromone heatmap at fine-grained intervals ----
+        if (iteration + 1) % PHEROMONE_SAVE_INTERVAL == 0:
+            fname = os.path.join(
+                PHEROMONE_EVOLUTION_DIR,
+                f"pheromone_iter_{iteration+1:04d}.png"
+            )
+            plot_heatmap(pheromone_matrix,
+                         title=f"Pheromone Level (iter {iteration+1})",
+                         filename=fname)
+
+        # Record convergence
+        if best_length < np.inf:
+            best_lengths.append(best_length)
+            journey = simulate_best_tour(best_tour, departure_datetime_utc)
+            if journey:
+                best_works.append(compute_total_work(journey))
+            travel_hours = (best_time_cost - best_waiting_time).total_seconds() / 3600.0
+            best_travel_times.append(travel_hours)
+
+        # Progress logging
+        if (iteration + 1) % PROGRESS_UPDATE_INTERVAL == 0 and best_tour:
+            journey = simulate_best_tour(best_tour, departure_datetime_utc)
+            total_time_hrs = best_time_cost.total_seconds() / 3600.0
+            penalty_flag = any(leg["Is Dark Upon Arrival"] == "No" for leg in journey) if journey else False
+            logging.info(
+                f"Iteration {iteration+1}: Length={best_length:.2f} km, "
+                f"Travel Time={(total_time_hrs - best_waiting_time.total_seconds()/3600.0):.2f} h, "
+                f"Work={best_works[-1]/1e10:.2f}e10 J, "
+                f"EffCost={best_total_effective_cost/1e10:.2f}e10 J, "
+                f"Penalty? {'Yes' if penalty_flag else 'No'}"
+            )
+            if journey:
+                avg_speed = sum(leg["Speed (km/h)"] for leg in journey) / len(journey)
+                smoothing = 0.1
+
+                # propose a new default
+                old_speed = DEFAULT_SANTA_SPEED_KMPH
+                candidate_speed = smoothing * avg_speed + (1 - smoothing) * old_speed
+
+                # temporarily apply and test for penalties
+                speed_matrix.fill(candidate_speed)
+                test_journey = simulate_best_tour(best_tour, departure_datetime_utc)
+                penalty_if = any(leg["Is Dark Upon Arrival"] == "No" for leg in test_journey)
+
+                if not penalty_if:
+                    # accept the new default
+                    DEFAULT_SANTA_SPEED_KMPH = candidate_speed
+                    logging.info(f"Updated DEFAULT_SANTA_SPEED_KMPH to {DEFAULT_SANTA_SPEED_KMPH:.2f} km/h")
+                else:
+                    # reject it, revert
+                    speed_matrix.fill(old_speed)
+                    logging.info(
+                        f"Skipped default‐speed update to {candidate_speed:.2f} km/h (would incur penalty); "
+                        f"remains {old_speed:.2f} km/h"
+                    )
+
+        # Special iterations: CSV exports, plotting, and new visuals
+        if (iteration + 1) in SPECIAL_ITERS and best_tour:
+            iter_dir = os.path.join(MAIN_OUTPUT_DIR, f"iteration_{iteration+1}")
+            os.makedirs(iter_dir, exist_ok=True)
+
+            journey = simulate_best_tour(best_tour, departure_datetime_utc)
+            export_tour_to_csv(journey, os.path.join(iter_dir, f"santa_tour_iteration_{iteration+1}.csv"))
+            export_route_coordinates_to_csv(best_tour, os.path.join(iter_dir, f"route_coords_{iteration+1}.csv"))
+
+            steps = list(range(len(best_lengths)))
+            plot_convergence_curve(steps, best_lengths, 'Iteration', 'Best Tour Length (km)',
+                                   'Convergence: Tour Length', os.path.join(iter_dir, "convergence_length.png"))
+            plot_convergence_curve(steps, best_works, 'Iteration', 'Best Work (J)',
+                                   'Convergence: Work', os.path.join(iter_dir, "convergence_work.png"))
+            plot_convergence_curve(steps, best_travel_times, 'Iteration', 'Best Travel Time (h)',
+                                   'Convergence: Travel Time', os.path.join(iter_dir, "convergence_travel_time.png"))
+            plot_dual_convergence_curve_triple(steps, best_lengths, best_travel_times, best_works,
+                                               "Tour Length (km)", "Travel Time (h)", "Total Work (J)",
+                                               "Double Convergence Curve", os.path.join(iter_dir, "Triple_convergence.png"))
+
+            plot_tour(best_tour, best_length,
+                      best_time_cost.total_seconds() / 3600.0,
+                      best_waiting_time.total_seconds() / 3600.0,
+                      os.path.join(iter_dir, "best_tour.png"))
+            if journey:
+                leg_nums = list(range(1, len(journey) + 1))
+                plot_leg_chart(leg_nums, [leg["Speed (km/h)"] for leg in journey],
+                               "Leg Number", "Speed (km/h)", "Leg Velocities",
+                               os.path.join(iter_dir, "leg_velocities.png"))
+                plot_leg_chart(leg_nums, [leg["Work (J)"] for leg in journey],
+                               "Leg Number", "Work (J)", "Leg Work",
+                               os.path.join(iter_dir, "leg_work.png"))
+
+            # Diversity matrix
+            div_csv = os.path.join(iter_dir, f"diversity_matrix_iteration_{iteration+1}.csv")
+            matrix = [(f"Ant_{i}", ant.decision_history)
+                      for i, ant in enumerate(ants) if ant.decision_history]
+            if matrix:
+                with open(div_csv, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    max_steps = max(len(hist) for _, hist in matrix)
+                    writer.writerow(["Ant"] + [f"Step_{s+1}" for s in range(max_steps)])
+                    for ant_name, hist in matrix:
+                        writer.writerow([ant_name] + hist + [''] * (max_steps - len(hist)))
+                logging.info(f"Diversity matrix exported to {div_csv}")
+
+            # New visualizations
+            plot_heatmap(pheromone_matrix, 'Pheromone Level', os.path.join(iter_dir, "pheromone_heatmap.png"))
+            plot_decision_heatmap([ant.decision_history for ant in ants], os.path.join(iter_dir, "decision_heatmap.png"))
+            animate_tour(best_tour, departure_datetime_utc, os.path.join(iter_dir, "tour_animation.mp4"))
+            plot_gantt_tour(journey, os.path.join(iter_dir, "gantt_darkness_chart.png"))
+            plot_population_coverage(journey, os.path.join(iter_dir, "population_coverage.png"))
+
+    # Final exports
+    if best_tour:
+        final_journey = simulate_best_tour(best_tour, departure_datetime_utc)
+        export_tour_to_csv(final_journey, os.path.join(MAIN_OUTPUT_DIR, "final_best_tour.csv"))
+        export_route_coordinates_to_csv(best_tour, os.path.join(MAIN_OUTPUT_DIR, "final_route_coords.csv"))
+        logging.info("Final best tour and route coordinates exported.")
+
+if __name__ == '__main__':
+    main()
