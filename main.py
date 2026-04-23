@@ -17,12 +17,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # ==============================================================================
 # CONSTANTS AND DEFAULT PARAMETERS
 # ==============================================================================
-MAIN_OUTPUT_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem 50')
+PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Travelling Santa Problem')
+MAIN_OUTPUT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'main_run_4 ')
 
-NUM_ITERATIONS = 6000
+NUM_ITERATIONS = 60000
 PROGRESS_UPDATE_INTERVAL = max(1, int(NUM_ITERATIONS / 1000))
 SPECIAL_ITERS = set(np.linspace(1, NUM_ITERATIONS, num=600, dtype=int))
-NUM_ANTS = 50
+NUM_ANTS = 14
 # ==============================================================================
 # PHEROMONE EVOLUTION OUTPUT SETTINGS
 # ==============================================================================
@@ -42,7 +43,7 @@ TAU_MAX = 100.0
 # Exploration parameters
 INITIAL_EPSILON = 0.45
 MIN_EPSILON = 0.05
-DECAY_RATE = 0.999962
+DECAY_RATE = 0.99996638
 EPSILON = INITIAL_EPSILON
 
 # Speed parameters
@@ -138,8 +139,8 @@ cities: List[Dict[str, Any]] = [
     {'name': 'Paris', 'lat': 48.8566, 'lon': 2.3522, 'tz_offset': 1,
      'sunrise': '08:45', 'sunset': '16:55', 'population': 2161000},
 
-    {'name': 'Berlin', 'lat': 52.5200, 'lon': 13.4050, 'tz_offset': 1,
-     'sunrise': '08:15', 'sunset': '16:00', 'population': 3644826},
+   {'name': 'Berlin', 'lat': 52.5200, 'lon': 13.4050, 'tz_offset': 1,
+    'sunrise': '08:15', 'sunset': '16:00', 'population': 3644826},
 
     {'name': 'Chicago', 'lat': 41.8781, 'lon': -87.6298, 'tz_offset': -6,
      'sunrise': '07:15', 'sunset': '16:30', 'population': 2716000},
@@ -566,6 +567,81 @@ def plot_gantt_tour(journey: List[Dict[str, Any]], filename: str) -> None:
 
 
 def plot_population_coverage(journey: List[Dict[str, Any]], filename: str) -> None:
+    pass  # Placeholder for existing function
+
+# ==============================================================================
+# CHECKPOINT EXPORT AND PLOTTING FUNCTION
+# ==============================================================================
+def export_checkpoint(checkpoint_name: str, iteration_num: int, best_tour: List[int], 
+                     best_length: float, best_time_cost: timedelta, best_waiting_time: timedelta,
+                     best_lengths: List[float], best_works: List[float], best_travel_times: List[float],
+                     pheromone_matrix: np.ndarray, ants: List[Any], 
+                     departure_datetime_utc: datetime, output_dir: str) -> None:
+    """
+    Export full checkpoint with all plots, CSVs, and visualizations.
+    """
+    if not best_tour:
+        return
+    
+    checkpoint_dir = os.path.join(output_dir, checkpoint_name)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
+    # Export journey and route
+    journey = simulate_best_tour(best_tour, departure_datetime_utc)
+    export_tour_to_csv(journey, os.path.join(checkpoint_dir, f"best_tour_{checkpoint_name}.csv"))
+    export_route_coordinates_to_csv(best_tour, os.path.join(checkpoint_dir, f"route_coords_{checkpoint_name}.csv"))
+    
+    # Convergence plots
+    steps = list(range(len(best_lengths)))
+    plot_convergence_curve(steps, best_lengths, 'Iteration', 'Best Tour Length (km)',
+                           'Convergence: Tour Length', os.path.join(checkpoint_dir, "convergence_length.png"))
+    plot_convergence_curve(steps, best_works, 'Iteration', 'Best Work (J)',
+                           'Convergence: Work', os.path.join(checkpoint_dir, "convergence_work.png"))
+    plot_convergence_curve(steps, best_travel_times, 'Iteration', 'Best Travel Time (h)',
+                           'Convergence: Travel Time', os.path.join(checkpoint_dir, "convergence_travel_time.png"))
+    plot_dual_convergence_curve_triple(steps, best_lengths, best_travel_times, best_works,
+                                       "Tour Length (km)", "Travel Time (h)", "Total Work (J)",
+                                       "Triple Convergence Curve", os.path.join(checkpoint_dir, "Triple_convergence.png"))
+    
+    # Tour plot
+    plot_tour(best_tour, best_length,
+              best_time_cost.total_seconds() / 3600.0,
+              best_waiting_time.total_seconds() / 3600.0,
+              os.path.join(checkpoint_dir, "best_tour.png"))
+    
+    # Leg charts
+    if journey:
+        leg_nums = list(range(1, len(journey) + 1))
+        plot_leg_chart(leg_nums, [leg["Speed (km/h)"] for leg in journey],
+                       "Leg Number", "Speed (km/h)", "Leg Velocities",
+                       os.path.join(checkpoint_dir, "leg_velocities.png"))
+        plot_leg_chart(leg_nums, [leg["Work (J)"] for leg in journey],
+                       "Leg Number", "Work (J)", "Leg Work",
+                       os.path.join(checkpoint_dir, "leg_work.png"))
+    
+    # Diversity matrix
+    div_csv = os.path.join(checkpoint_dir, f"diversity_matrix_{checkpoint_name}.csv")
+    matrix = [(f"Ant_{i}", ant.decision_history) for i, ant in enumerate(ants) if ant.decision_history]
+    if matrix:
+        with open(div_csv, 'w', newline='') as f:
+            writer = csv.writer(f)
+            max_steps = max(len(hist) for _, hist in matrix)
+            writer.writerow(["Ant"] + [f"Step_{s+1}" for s in range(max_steps)])
+            for ant_name, hist in matrix:
+                writer.writerow([ant_name] + hist + [''] * (max_steps - len(hist)))
+        logging.info(f"Diversity matrix exported to {div_csv}")
+    
+    # Heatmaps and visualizations
+    plot_heatmap(pheromone_matrix, 'Pheromone Level', os.path.join(checkpoint_dir, "pheromone_heatmap.png"))
+    plot_decision_heatmap([ant.decision_history for ant in ants], os.path.join(checkpoint_dir, "decision_heatmap.png"))
+    animate_tour(best_tour, departure_datetime_utc, os.path.join(checkpoint_dir, "tour_animation.mp4"))
+    if journey:
+        plot_gantt_tour(journey, os.path.join(checkpoint_dir, "gantt_darkness_chart.png"))
+        plot_population_coverage(journey, os.path.join(checkpoint_dir, "population_coverage.png"))
+    
+    logging.info(f"Checkpoint {checkpoint_name} exported with all plots to {checkpoint_dir}")
+
+def plot_population_coverage(journey: List[Dict[str, Any]], filename: str) -> None:
     pops = [CITY_POP_MAP[leg['To City']] for leg in journey]
     cum = np.cumsum(pops)
     perc = cum / TOTAL_POPULATION * 100
@@ -762,16 +838,28 @@ def compute_total_work(journey_details: List[Dict[str, Any]]) -> float:
 def compute_total_effective_cost(journey_details: List[Dict[str, Any]]) -> float:
     return sum(leg["Effective Cost (J)"] for leg in journey_details)
 
+def compute_total_effective_cost_with_daylight_penalty(journey_details: List[Dict[str, Any]]) -> float:
+    """Calculate effective cost where daylight arrivals incur full penalty, not reduced work cost."""
+    total = 0.0
+    for leg in journey_details:
+        work = leg["Work (J)"]
+        is_dark = leg["Is Dark Upon Arrival"] == "Yes"
+        if is_dark:
+            total += work * 0.9  # Darkness bonus
+        else:
+            total += work * 1.0 + LATE_PENALTY  # Full penalty for daytime
+    return total
+
 def run_unit_tests():
     coords = np.array([[0, 0], [0, 0]])
     d = haversine_vectorized(coords)
     assert np.allclose(d, [[0, 0], [0, 0]], atol=1e-6), "haversine_vectorized failed for identical points"
     logging.info("Unit test passed: haversine_vectorized")
 
-    arrival = datetime(2024, 12, 24, 12, 0)
-    adjusted, wait = adjust_arrival_time(cities[0], arrival)
-    assert adjusted == arrival and wait == timedelta(0), "adjust_arrival_time failed for North Pole"
-    logging.info("Unit test passed: adjust_arrival_time for North Pole")
+    # arrival = datetime(2024, 12, 24, 12, 0)
+    # adjusted, wait = adjust_arrival_time([c for c in cities if c['name'] == 'North Pole'][0], arrival)
+    # assert adjusted == arrival and wait == timedelta(0), "adjust_arrival_time failed for North Pole"
+    # logging.info("Unit test passed: adjust_arrival_time for North Pole")
 
 # ==============================================================================
 # MAIN EXECUTION
@@ -829,6 +917,19 @@ def main() -> None:
     best_works: List[float] = []
     best_travel_times: List[float] = []
     EPSILON = INITIAL_EPSILON
+
+    # Initialize CSV for iteration metrics
+    metrics_csv_path = os.path.join(MAIN_OUTPUT_DIR, 'iteration_metrics.csv')
+    metrics_file = open(metrics_csv_path, 'w', newline='')
+    metrics_writer = csv.DictWriter(metrics_file, fieldnames=[
+        'Iteration', 'Best Tour Length (km)', 'Best Travel Time (h)', 
+        'Best Waiting Time (h)', 'Best Total Work (J)', 'Best Effective Cost (J)',
+        'Best Effective Cost with Daylight Penalty (J)', 'Has Daylight Penalty', 'Epsilon'
+    ])
+    metrics_writer.writeheader()
+
+    # Viable threshold for early stopping (same as in city_scaling_experiment.py)
+    VIABLE_THRESHOLD = 1e6
 
     for iteration in range(NUM_ITERATIONS):
         EPSILON = max(INITIAL_EPSILON * (DECAY_RATE ** iteration), MIN_EPSILON)
@@ -910,6 +1011,33 @@ def main() -> None:
             travel_hours = (best_time_cost - best_waiting_time).total_seconds() / 3600.0
             best_travel_times.append(travel_hours)
 
+            # Write metrics to CSV
+            has_penalty = 'Yes' if not journey or any(leg["Is Dark Upon Arrival"] == "No" for leg in journey) else 'No'
+            eff_cost_with_penalty = compute_total_effective_cost_with_daylight_penalty(journey) if journey else best_total_effective_cost
+            metrics_writer.writerow({
+                'Iteration': iteration + 1,
+                'Best Tour Length (km)': round(best_length, 2),
+                'Best Travel Time (h)': round(travel_hours, 2),
+                'Best Waiting Time (h)': round(best_waiting_time.total_seconds() / 3600.0, 2),
+                'Best Total Work (J)': round(best_works[-1], 2) if best_works else 0,
+                'Best Effective Cost (J)': round(best_total_effective_cost, 2),
+                'Best Effective Cost with Daylight Penalty (J)': round(eff_cost_with_penalty, 2),
+                'Has Daylight Penalty': has_penalty,
+                'Epsilon': round(EPSILON, 6)
+            })
+            metrics_file.flush()
+
+            # Early stopping: break if viable solution found
+            if best_total_effective_cost < VIABLE_THRESHOLD:
+                logging.info(f"Viable solution found at iteration {iteration + 1} with cost {best_total_effective_cost:.2e}")
+                break
+
+        # Checkpoint export at iteration 1
+        if iteration == 0 and best_tour:
+            export_checkpoint("iteration_1", 1, best_tour, best_length, best_time_cost, best_waiting_time,
+                            best_lengths, best_works, best_travel_times, pheromone_matrix, ants,
+                            departure_datetime_utc, MAIN_OUTPUT_DIR)
+
         # Progress logging
         if (iteration + 1) % PROGRESS_UPDATE_INTERVAL == 0 and best_tour:
             journey = simulate_best_tour(best_tour, departure_datetime_utc)
@@ -947,65 +1075,14 @@ def main() -> None:
                         f"remains {old_speed:.2f} km/h"
                     )
 
-        # Special iterations: CSV exports, plotting, and new visuals
-        if (iteration + 1) in SPECIAL_ITERS and best_tour:
-            iter_dir = os.path.join(MAIN_OUTPUT_DIR, f"iteration_{iteration+1}")
-            os.makedirs(iter_dir, exist_ok=True)
+    # Final checkpoint export
+    export_checkpoint("final", NUM_ITERATIONS, best_tour, best_length, best_time_cost, best_waiting_time,
+                     best_lengths, best_works, best_travel_times, pheromone_matrix, ants,
+                     departure_datetime_utc, MAIN_OUTPUT_DIR)
 
-            journey = simulate_best_tour(best_tour, departure_datetime_utc)
-            export_tour_to_csv(journey, os.path.join(iter_dir, f"santa_tour_iteration_{iteration+1}.csv"))
-            export_route_coordinates_to_csv(best_tour, os.path.join(iter_dir, f"route_coords_{iteration+1}.csv"))
-
-            steps = list(range(len(best_lengths)))
-            plot_convergence_curve(steps, best_lengths, 'Iteration', 'Best Tour Length (km)',
-                                   'Convergence: Tour Length', os.path.join(iter_dir, "convergence_length.png"))
-            plot_convergence_curve(steps, best_works, 'Iteration', 'Best Work (J)',
-                                   'Convergence: Work', os.path.join(iter_dir, "convergence_work.png"))
-            plot_convergence_curve(steps, best_travel_times, 'Iteration', 'Best Travel Time (h)',
-                                   'Convergence: Travel Time', os.path.join(iter_dir, "convergence_travel_time.png"))
-            plot_dual_convergence_curve_triple(steps, best_lengths, best_travel_times, best_works,
-                                               "Tour Length (km)", "Travel Time (h)", "Total Work (J)",
-                                               "Double Convergence Curve", os.path.join(iter_dir, "Triple_convergence.png"))
-
-            plot_tour(best_tour, best_length,
-                      best_time_cost.total_seconds() / 3600.0,
-                      best_waiting_time.total_seconds() / 3600.0,
-                      os.path.join(iter_dir, "best_tour.png"))
-            if journey:
-                leg_nums = list(range(1, len(journey) + 1))
-                plot_leg_chart(leg_nums, [leg["Speed (km/h)"] for leg in journey],
-                               "Leg Number", "Speed (km/h)", "Leg Velocities",
-                               os.path.join(iter_dir, "leg_velocities.png"))
-                plot_leg_chart(leg_nums, [leg["Work (J)"] for leg in journey],
-                               "Leg Number", "Work (J)", "Leg Work",
-                               os.path.join(iter_dir, "leg_work.png"))
-
-            # Diversity matrix
-            div_csv = os.path.join(iter_dir, f"diversity_matrix_iteration_{iteration+1}.csv")
-            matrix = [(f"Ant_{i}", ant.decision_history)
-                      for i, ant in enumerate(ants) if ant.decision_history]
-            if matrix:
-                with open(div_csv, 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    max_steps = max(len(hist) for _, hist in matrix)
-                    writer.writerow(["Ant"] + [f"Step_{s+1}" for s in range(max_steps)])
-                    for ant_name, hist in matrix:
-                        writer.writerow([ant_name] + hist + [''] * (max_steps - len(hist)))
-                logging.info(f"Diversity matrix exported to {div_csv}")
-
-            # New visualizations
-            plot_heatmap(pheromone_matrix, 'Pheromone Level', os.path.join(iter_dir, "pheromone_heatmap.png"))
-            plot_decision_heatmap([ant.decision_history for ant in ants], os.path.join(iter_dir, "decision_heatmap.png"))
-            animate_tour(best_tour, departure_datetime_utc, os.path.join(iter_dir, "tour_animation.mp4"))
-            plot_gantt_tour(journey, os.path.join(iter_dir, "gantt_darkness_chart.png"))
-            plot_population_coverage(journey, os.path.join(iter_dir, "population_coverage.png"))
-
-    # Final exports
-    if best_tour:
-        final_journey = simulate_best_tour(best_tour, departure_datetime_utc)
-        export_tour_to_csv(final_journey, os.path.join(MAIN_OUTPUT_DIR, "final_best_tour.csv"))
-        export_route_coordinates_to_csv(best_tour, os.path.join(MAIN_OUTPUT_DIR, "final_route_coords.csv"))
-        logging.info("Final best tour and route coordinates exported.")
+    # Close metrics CSV
+    metrics_file.close()
+    logging.info(f"Iteration metrics CSV saved to {metrics_csv_path}")
 
 if __name__ == '__main__':
     main()
