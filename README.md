@@ -1,22 +1,22 @@
 # The Travelling Santa Problem
 
-Every Christmas Eve, Santa Claus must deliver gifts to cities across the world — but with one critical constraint: **he can only travel in darkness**. Arriving at a city while the sun is up risks being seen, so his route must be carefully timed to exploit the progression of night across time zones.
+Every Christmas Eve, Santa Claus must deliver gifts to cities across the world - but with one critical constraint: he can only travel in darkness. Arriving at a city while the sun is up risks being seen, so his route must be carefully timed to exploit the progression of night across time zones.
 
-This project frames that scenario as an optimisation problem and solves it using **Ant Colony Optimisation (ACO)** — an algorithm inspired by how real ant colonies find efficient paths through pheromone trails. Rather than simply finding the shortest route, the algorithm must balance tour distance, physical energy expenditure, and the hard constraint of arriving at every city under the cover of night.
+This project frames that scenario as an optimisation problem and solves it using Ant Colony Optimisation (ACO) - an algorithm inspired by how real ant colonies find efficient paths through pheromone trails. Rather than simply finding the shortest route, the algorithm must balance tour distance, physical energy expenditure, and the hard constraint of arriving at every city under the cover of night.
 
 ---
 
 ## The Problem
 
-The classic **Travelling Salesman Problem** asks: given a list of cities, what is the shortest possible route that visits each city exactly once and returns to the start?
+The classic Travelling Salesman Problem asks: given a list of cities, what is the shortest possible route that visits each city exactly once and returns to the start?
 
-The **Travelling Santa Problem** adds real-world complexity:
+The Travelling Santa Problem adds real-world complexity:
 
-- **Darkness constraint** — Santa may only arrive at a city during its local night window (between sunset and sunrise). Violating this incurs a massive penalty.
-- **Physics-based cost** — the route is not just evaluated on distance. The algorithm models the **aerodynamic work** required to fly the sleigh, accounting for air drag, speed, and the cumulative energy of the full journey.
-- **Time zones and scheduling** — each city has a real geographic location, timezone offset, and local sunrise/sunset times for December 24th. The clock advances as Santa travels, making sequencing critical.
+- **Darkness constraint** - Santa may only arrive at a city during its local night window (between sunset and sunrise). Violating this incurs a massive penalty.
+- **Physics-based cost** - the route is not just evaluated on distance. The algorithm models the aerodynamic work required to fly the sleigh, accounting for air drag, speed, and the cumulative energy of the full journey.
+- **Time zones and scheduling** - each city has a real geographic location, timezone offset, and local sunrise/sunset times for December 24th. The clock advances as Santa travels, making sequencing critical.
 
-The goal is to find a route that visits all cities, respects every city's darkness window, and minimises the total physical work done — not just the kilometres flown.
+The goal is to find a route that visits all cities, respects every city's darkness window, and minimises the total physical work done - not just the kilometres flown.
 
 ---
 
@@ -24,7 +24,7 @@ The goal is to find a route that visits all cities, respects every city's darkne
 
 ### Ant Colony Optimisation
 
-ACO is a nature-inspired metaheuristic. A colony of artificial "ants" each constructs a candidate route through the cities. After each round, routes that performed well deposit virtual **pheromone** on the edges they used. Over thousands of iterations, the colony converges on an increasingly efficient path — with worse routes fading as their pheromone evaporates.
+ACO is a nature-inspired metaheuristic. A colony of artificial "ants" each constructs a candidate route through the cities. After each round, routes that performed well deposit virtual pheromone on the edges they used. Over thousands of iterations, the colony converges on an increasingly efficient path - with worse routes fading as their pheromone evaporates.
 
 Key parameters that shape the search:
 
@@ -40,9 +40,9 @@ The algorithm starts with high exploration (ants take more random paths) and gra
 ### The Cost Function
 
 At each candidate route, the algorithm calculates:
-1. **Total tour length** — the sum of great-circle distances between cities
-2. **Total work** — aerodynamic energy cost of the full journey
-3. **Darkness penalty** — an enormous penalty (`2.1 × 10¹⁰⁰`) applied whenever Santa arrives at a city in daylight
+1. **Total tour length** - the sum of great-circle distances between cities
+2. **Total work** - aerodynamic energy cost of the full journey
+3. **Darkness penalty** - an enormous penalty (`2.1 × 10¹⁰⁰`) applied whenever Santa arrives at a city in daylight
 
 This penalty is so severe that the algorithm effectively treats a daylight violation as an invalid solution, forcing the colony to find routes that respect all time windows before optimising further.
 
@@ -52,7 +52,7 @@ This penalty is so severe that the algorithm effectively treats a daylight viola
 
 The problem covers approximately 30 major world cities spanning every continent and time zone, including Tokyo, Delhi, Cairo, London, New York, São Paulo, and Sydney. Each city carries its real coordinates, population, timezone, and December 24th sunrise/sunset times.
 
-The December 24th date is deliberate — it sets the specific daylight windows Santa must navigate, with shorter days in the northern hemisphere winter and longer days in the south.
+The December 24th date is deliberate - it sets the specific daylight windows Santa must navigate, with shorter days in the northern hemisphere winter and longer days in the south.
 
 ---
 
@@ -60,71 +60,45 @@ The December 24th date is deliberate — it sets the specific daylight windows S
 
 ### Core Algorithm
 
-**`main.py`** — The full Travelling Santa Problem solver. Runs 60,000 iterations with 14 ants, enforces darkness constraints, and outputs convergence data, route maps, pheromone evolution snapshots, a Gantt chart showing each city's darkness window, and an animated tour.
+**`main.py`** - The full Travelling Santa Problem solver. Runs 60,000 iterations with 14 ants, enforces darkness constraints, and outputs convergence data, route maps, pheromone evolution snapshots, a Gantt chart showing each city's darkness window, and an animated tour.
 
-**`distance_only_aco.py`** — A stripped-back baseline that solves the same city set but ignores all constraints, optimising only for shortest distance. Used to quantify how much the darkness and physics constraints change the resulting route and convergence behaviour.
+**`distance_only_aco.py`** - A stripped-back baseline that solves the same city set but ignores all constraints, optimising only for shortest distance. Used to quantify how much the darkness and physics constraints change the resulting route and convergence behaviour.
 
 ### Experiments
 
-**`ants_optimization_experiment.py`** — Tests colony sizes of 5, 10, 25, 50, and 75 ants across multiple runs to find the optimal number. Outputs recommendation on which ant count best balances solution quality against runtime.
+**`ants_optimization_experiment.py`** - Tests colony sizes of 5, 10, 25, 50, and 75 ants across multiple runs to find the optimal number. Outputs recommendation on which ant count best balances solution quality against runtime.
 
-**`city_scaling_experiment.py`** — Progressively increases the number of cities (10 → 25) and fits mathematical models (power law, exponential, quadratic) to the results. Reveals the computational complexity of the problem and predicts how it would scale to larger city sets.
+**`city_scaling_experiment.py`** - Progressively increases the number of cities (10 → 25) and fits mathematical models (power law, exponential, quadratic) to the results. Reveals the computational complexity of the problem and predicts how it would scale to larger city sets.
 
-**`convergence_with_error_bars.py`** — Runs the algorithm multiple times and plots convergence curves with error bars, showing how consistent the colony is at finding good solutions and where variance is highest.
+**`convergence_with_error_bars.py`** - Runs the algorithm multiple times and plots convergence curves with error bars, showing how consistent the colony is at finding good solutions and where variance is highest.
 
-**`full_scale_convergence_experiment.py`** — A comprehensive convergence analysis over the full city set, tracking how solution quality evolves across the entire run.
+**`full_scale_convergence_experiment.py`** - A comprehensive convergence analysis over the full city set, tracking how solution quality evolves across the entire run.
 
-**`experiment_runner.py`** — Orchestrates all experiments in sequence, collecting results and generating summary statistics across 30 runs.
+**`experiment_runner.py`** - Orchestrates all experiments in sequence, collecting results and generating summary statistics across 30 runs.
 
 ### Utilities
 
-**`plots.py`** — Generates dual-axis convergence plots comparing the constrained TSaP against the distance-only baseline, showing both tour length and work on the same chart.
+**`plots.py`** - Generates dual-axis convergence plots comparing the constrained TSaP against the distance-only baseline, showing both tour length and work on the same chart.
 
-**`generate_summary.py`** — Aggregates results across experiment runs into a single summary report.
+**`generate_summary.py`** - Aggregates results across experiment runs into a single summary report.
 
-**`run_experiments.sh`** — Shell script to run all experiments from the command line in one go.
+**`run_experiments.sh`** - Shell script to run all experiments from the command line in one go.
 
-**`INDEX.py`** — An index of all scripts and their functions for quick navigation.
-
----
-
-## Running the Project
-
-```bash
-# Solve the full Travelling Santa Problem
-python main.py
-
-# Run the distance-only baseline for comparison
-python distance_only_aco.py
-
-# Run statistical validation across 30 runs
-python experiment_runner.py
-
-# Find the optimal ant colony size
-python ants_optimization_experiment.py
-
-# Analyse how the problem scales with city count
-python city_scaling_experiment.py
-
-# Run everything
-bash run_experiments.sh all
-```
-
-All outputs are saved to `~/Desktop/Travelling Santa Problem/` and organised by experiment type.
+**`INDEX.py`** - An index of all scripts and their functions for quick navigation.
 
 ---
 
 ## Key Outputs
 
-- **Convergence plots** — how tour length and work improve over iterations
-- **Route maps** — geographic visualisation of the best tour found
-- **Gantt chart** — each city's darkness window against Santa's arrival time
-- **Pheromone heatmaps** — how the colony's confidence in each route edge builds over time
-- **Tour animation** — animated playback of Santa's optimal route
-- **Statistical summaries** — mean, standard deviation, best and worst across repeated runs
+- **Convergence plots** - how tour length and work improve over iterations
+- **Route maps** - geographic visualisation of the best tour found
+- **Gantt chart** - each city's darkness window against Santa's arrival time
+- **Pheromone heatmaps** - how the colony's confidence in each route edge builds over time
+- **Tour animation** - animated playback of Santa's optimal route
+- **Statistical summaries** - mean, standard deviation, best and worst across repeated runs
 
 ---
 
 ## Context
 
-This project was developed as part of a dissertation exploring physics-informed combinatorial optimisation. The central argument is that adding real-world constraints (time windows, energy cost) to a classical TSP not only changes the optimal route but meaningfully changes the shape of the search — which the experiments are designed to demonstrate through comparison with the unconstrained baseline.
+This project was developed as part of a dissertation exploring physics-informed optimisation. The central argument is that adding real-world constraints (time windows, energy cost) to a classical TSP not only changes the optimal route but meaningfully changes the shape of the search - which the experiments are designed to demonstrate through comparison with the unconstrained baseline.
