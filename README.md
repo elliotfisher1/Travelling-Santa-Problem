@@ -50,7 +50,7 @@ This penalty is so severe that the algorithm effectively treats a daylight viola
 
 ## Cities
 
-The problem covers approximately 30 major world cities spanning every continent and time zone, including Tokyo, Delhi, Cairo, London, New York, São Paulo, and Sydney. Each city carries its real coordinates, population, timezone, and December 24th sunrise/sunset times.
+The problem covers major world cities spanning every continent and time zone, including Tokyo, Delhi, Cairo, London, New York, São Paulo, and Sydney. Each city carries its real coordinates, population, timezone, and December 24th sunrise/sunset times.
 
 The December 24th date is deliberate - it sets the specific daylight windows Santa must navigate, with shorter days in the northern hemisphere winter and longer days in the south.
 
