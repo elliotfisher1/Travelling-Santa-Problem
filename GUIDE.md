@@ -32,7 +32,7 @@ df -h $HOME
 python main.py
 ```
 
-This runs the full Travelling Santa Problem — 60,000 iterations, 14 ants, darkness constraints enforced. A good first step to confirm everything is working before committing to longer experiment runs. Takes roughly 5–10 minutes.
+This runs the full Travelling Santa Problem - 60,000 iterations, 14 ants, darkness constraints enforced. A good first step to confirm everything is working before committing to longer experiment runs. Takes roughly 5–10 minutes.
 
 ### Baseline comparison
 
@@ -40,7 +40,7 @@ This runs the full Travelling Santa Problem — 60,000 iterations, 14 ants, dark
 python distance_only_aco.py
 ```
 
-Runs the same city set but ignores all constraints — no darkness windows, no physics cost, just shortest distance. Use this to compare against the full algorithm and quantify how much the constraints change the route and convergence behaviour.
+Runs the same city set but ignores all constraints - no darkness windows, no physics cost, just shortest distance. Use this to compare against the full algorithm and quantify how much the constraints change the route and convergence behaviour.
 
 ### Statistical validation
 
@@ -118,22 +118,22 @@ NUM_RUNS_PER_CITY_COUNT = 5
 
 Each run tracks the following per iteration, saved to `iteration_metrics.csv`:
 
-**Tour length (km)** — the total great-circle distance of the route. Lower is better, but this is not the primary optimisation target.
+**Tour length (km)** - the total great-circle distance of the route. Lower is better, but this is not the primary optimisation target.
 
-**Travel time (hours)** — actual flight time at the speeds Santa flies each leg. This varies because speed is dynamically adjusted to hit darkness windows.
+**Travel time (hours)** - actual flight time at the speeds Santa flies each leg. This varies because speed is dynamically adjusted to hit darkness windows.
 
-**Waiting time (hours)** — time spent at cities waiting for night to fall. High waiting time means the route ordering is inefficient; Santa is arriving somewhere too early and sitting idle.
+**Waiting time (hours)** - time spent at cities waiting for night to fall. High waiting time means the route ordering is inefficient; Santa is arriving somewhere too early and sitting idle.
 
-**Total work (Joules)** — the physical energy cost of the journey, modelled as aerodynamic drag: W = ½ρAv²d, where ρ is air density, A is the sleigh's cross-sectional area, v is speed, and d is distance. This is the primary quantity the algorithm is trying to minimise.
+**Total work (Joules)** - the physical energy cost of the journey, modelled as aerodynamic drag: W = ½ρAv²d, where ρ is air density, A is the sleigh's cross-sectional area, v is speed, and d is distance. This is the primary quantity the algorithm is trying to minimise.
 
-**Effective cost (Joules)** — the actual value being optimised. Combines total work with the darkness penalty:
+**Effective cost (Joules)** - the actual value being optimised. Combines total work with the darkness penalty:
 
 - If Santa arrives at every city in darkness: effective cost ≈ total work × 0.9 (a small bonus)
 - If any city is visited in daylight: effective cost += 2.1 × 10¹⁰⁰ (effectively infinite)
 
-**Daylight penalty** — whether the current best route violates any darkness window. Once the algorithm finds its first fully valid route (no daylight arrivals), this flips off and stays off.
+**Daylight penalty** - whether the current best route violates any darkness window. Once the algorithm finds its first fully valid route (no daylight arrivals), this flips off and stays off.
 
-**Epsilon** — the current exploration rate. Starts at 0.45 and decays toward 0.05 over the run. High epsilon means ants are exploring new paths; low epsilon means they are reinforcing known good routes.
+**Epsilon** - the current exploration rate. Starts at 0.45 and decays toward 0.05 over the run. High epsilon means ants are exploring new paths; low epsilon means they are reinforcing known good routes.
 
 ---
 
@@ -157,7 +157,7 @@ Every run (including those inside experiments) produces:
 | File | Contents |
 |------|----------|
 | `iteration_metrics.csv` | One row per iteration: all metrics above |
-| `final_best_tour.csv` | Complete journey — each leg's distance, speed, departure/arrival times, dark/light status, work cost |
+| `final_best_tour.csv` | Complete journey - each leg's distance, speed, departure/arrival times, dark/light status, work cost |
 | `final_route_coords.csv` | City order and coordinates for mapping |
 | `convergence_length.png` | Tour length over iterations |
 | `convergence_work.png` | Work cost over iterations |
@@ -173,9 +173,9 @@ Every run (including those inside experiments) produces:
 
 | Experiment | Key output file |
 |------------|----------------|
-| Multi-run (`experiment_runner.py`) | `summary_statistics.txt` — mean ± std across 30 runs |
-| Ant optimisation | `RECOMMENDATION.txt` — optimal colony size with justification |
-| City scaling | `ANALYSIS.txt` — fitted equations, R² values, complexity classification |
+| Multi-run (`experiment_runner.py`) | `summary_statistics.txt` - mean ± std across 30 runs |
+| Ant optimisation | `RECOMMENDATION.txt` - optimal colony size with justification |
+| City scaling | `ANALYSIS.txt` - fitted equations, R² values, complexity classification |
 
 ---
 CSVs are written per-iteration and flushed to disk, so partial data is recoverable. Re-run the specific experiment; completed run subdirectories will already exist.
