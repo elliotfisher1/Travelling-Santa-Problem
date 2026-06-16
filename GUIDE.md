@@ -178,43 +178,5 @@ Every run (including those inside experiments) produces:
 | City scaling | `ANALYSIS.txt` — fitted equations, R² values, complexity classification |
 
 ---
+CSVs are written per-iteration and flushed to disk, so partial data is recoverable. Re-run the specific experiment; completed run subdirectories will already exist.
 
-## Interpreting results
-
-**Multi-run statistics**
-- Low standard deviation across runs → the algorithm is robust and converges reliably
-- High standard deviation → results are sensitive to random initialisation; consider more iterations or a larger colony
-- High daylight penalty rate → the constraint is rarely satisfied; the problem may need more iterations to find valid routes
-
-**Ant count optimisation**
-- Look for the colony size where "iterations to first valid route" stops improving meaningfully — that is the sweet spot
-- Beyond a certain point, more ants increases runtime without improving solution quality
-
-**City scaling**
-- A power law fit (y = a·xᵇ) with b ≈ 2 indicates the problem scales polynomially — manageable for moderate city counts
-- An exponential fit indicates the problem becomes intractable quickly at larger scales
-- The R² values tell you which model fits best; use the best-fit equation to predict convergence time for untested city counts
-
----
-
-## Troubleshooting
-
-**Module not found**
-```bash
-pip install --upgrade numpy matplotlib scipy
-```
-
-**Animation not generated**
-`tour_animation.mp4` requires ffmpeg. If it is not installed, the algorithm falls back to a GIF. Install with `brew install ffmpeg` on macOS.
-
-**Out of disk space**
-```bash
-du -sh ~/Desktop/Travelling\ Santa\ Problem/
-```
-Pheromone evolution snapshots are the main culprit. You can reduce them by increasing `PHEROMONE_SAVE_INTERVAL` in `main.py`.
-
-**Experiment crashes midway**
-The CSVs are written per-iteration and flushed to disk, so partial data is recoverable. Re-run the specific experiment; completed run subdirectories will already exist.
-
-**Tour length looks unreasonably large**
-Check that `LATE_PENALTY` is triggering — a tour length in the billions usually means a daylight violation is being included in the cost. The algorithm needs more iterations to find a fully valid route.
