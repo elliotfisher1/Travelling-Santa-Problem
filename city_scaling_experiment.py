@@ -16,16 +16,17 @@ from typing import List, Dict, Optional, Any, Tuple
 from scipy.optimize import curve_fit
 from scipy import stats
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# --- configuration ---
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MAIN_SCRIPT = os.path.join(SCRIPT_DIR, 'main.py')
 
 K_PER_CONTINENT = [1, 2, 3,4,5,6,7,8,9,10]
 NUM_RUNS_PER_K = 3  # Multiple runs for statistical significance
 NUM_ITERATIONS = 3000
 NUM_ANTS = 14  # Number of ants in the colony
-VIABLE_THRESHOLD = 1e50
+VIABLE_THRESHOLD = 1e14
 PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem')
 EXPERIMENT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, f'city_scaling_{NUM_ANTS}_ant_experiment')
 
@@ -52,7 +53,6 @@ ALL_CITIES = [
      'sunrise': '05:50', 'sunset': '20:50', 'population': 896444, 'continent': 'Oceania'},
     {'name': 'Honolulu', 'lat': 21.3099, 'lon': -157.8581, 'tz_offset': -10,
      'sunrise': '06:30', 'sunset': '18:45', 'population': 374676, 'continent': 'Oceania'},
-    # Asia (10 cities)
     # Asia (10 cities)
     {'name': 'Tokyo', 'lat': 35.6895, 'lon': 139.6917, 'tz_offset': 9,
      'sunrise': '06:48', 'sunset': '16:32', 'population': 37400068, 'continent': 'Asia'},
@@ -184,10 +184,6 @@ def get_cities_subset(k_per_continent: int) -> List[Dict[str, Any]]:
     selected.append(ALL_CITIES[-1])  # North Pole
     return selected
 
-# ==============================================================================
-# UTILITY: Generate city subset and run experiment
-# ==============================================================================
-
 def run_city_scaling_experiment(k_per_continent: int, run_num: int, experiment_dir: str) -> Dict[str, Any]:
     """
     Run TSP algorithm with k cities per continent.
@@ -197,7 +193,7 @@ def run_city_scaling_experiment(k_per_continent: int, run_num: int, experiment_d
     n_cities = len(cities)
     
     # Read the main script
-    with open("/Users/elliotfisher/Travelling-Santa-Problem-1/main.py", 'r') as f:
+    with open(MAIN_SCRIPT, 'r') as f:
         main_code = f.read()
     
     # Modify for this experiment
@@ -282,9 +278,7 @@ def run_city_scaling_experiment(k_per_continent: int, run_num: int, experiment_d
     
     return results
 
-# ==============================================================================
-# FITTING FUNCTIONS
-# ==============================================================================
+# --- fitting functions ---
 def power_law(x: np.ndarray, a: float, b: float) -> np.ndarray:
     """Power law: y = a * x^b"""
     return a * np.power(x, b)
@@ -297,9 +291,7 @@ def polynomial_quadratic(x: np.ndarray, a: float, b: float, c: float) -> np.ndar
     """Quadratic: y = a + b*x + c*x^2"""
     return a + b * x + c * np.power(x, 2)
 
-# ==============================================================================
-# PLOTTING FUNCTIONS
-# ==============================================================================
+# --- plotting functions ---
 def save_summary_for_k(k: int, n_cities: int, iterations: List[float], runtimes: List[float], experiment_dir: str) -> None:
     """Save a summary file after completing all runs for a specific k value."""
     summary_file = os.path.join(experiment_dir, f'summary_k_{k}.txt')
@@ -496,9 +488,7 @@ def plot_convergence_curves_by_city_count(all_results: List[Dict[str, Any]], exp
     plt.savefig(os.path.join(experiment_dir, 'convergence_curves_by_city_count.png'), dpi=150)
     plt.close()
 
-# ==============================================================================
-# MAIN EXECUTION
-# ==============================================================================
+# --- main execution ---
 def main() -> None:
     os.makedirs(EXPERIMENT_DIR, exist_ok=True)
     

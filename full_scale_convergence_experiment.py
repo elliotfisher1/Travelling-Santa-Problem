@@ -33,9 +33,8 @@ logging.getLogger().handlers[0].flush = lambda: __import__('sys').stdout.flush()
 for handler in logging.getLogger().handlers:
     handler.flush()
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
+# --- configuration ---
+# Update these paths to match your local output directories
 
 NUM_RUNS_TSAP = 10              # Number of TSaP runs
 NUM_RUNS_DISTANCE_ONLY = 10     # Number of Distance-Only runs
@@ -49,12 +48,11 @@ OUTPUT_CSV = os.path.join(EXPERIMENT_DIR, 'convergence_metrics_aggregated.csv')
 OUTPUT_PLOTS_DIR = os.path.join(EXPERIMENT_DIR, 'plots')
 
 # Python scripts to run
-TSAP_SCRIPT = '/Users/elliotfisher/Travelling-Santa-Problem-1/main.py'
-DISTANCE_ONLY_SCRIPT = '/Users/elliotfisher/Travelling-Santa-Problem-1/distance_only_aco.py'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TSAP_SCRIPT = os.path.join(SCRIPT_DIR, 'main.py')
+DISTANCE_ONLY_SCRIPT = os.path.join(SCRIPT_DIR, 'distance_only_aco.py')
 
-# ==============================================================================
-# Utility Functions
-# ==============================================================================
+
 
 def monitor_progress(run_dir: str, variant_name: str, run_num: int, stop_event: threading.Event):
     """

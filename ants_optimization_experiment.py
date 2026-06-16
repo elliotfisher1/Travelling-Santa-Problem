@@ -16,30 +16,30 @@ import json
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any, Tuple
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# --- configuration ---
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MAIN_SCRIPT = os.path.join(SCRIPT_DIR, 'main.py')
 
 ANT_COUNTS = [5, 10, 25,  50, 75]
 NUM_RUNS_PER_ANT_COUNT = 3  # Multiple runs for statistical significance
-CHECKPOINT_ITERATIONS = [100, 500, 1000]  # Milestone iterations to record metrics1
+CHECKPOINT_ITERATIONS = [100, 500, 1000]  # Milestone iterations to record metrics
 NUM_ITERATIONS = 1000
 PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem')
 EXPERIMENT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'ant_optimization3')
 
-# ==============================================================================
-# UTILITY: Import and modify main algorithm
-# ==============================================================================
+# --- utility: import and modify main algorithm ---
 def run_tsp_with_ant_count(ant_count: int, experiment_dir: str) -> Dict[str, Any]:
     """
     Run the main TSP algorithm with specified ant count.
     Returns dictionary with metrics.
     """
     import importlib.util
-    
+
     # Read the main script
-    with open("/Users/elliotfisher/Travelling-Santa-Problem-1/main.py", 'r') as f:
+    with open(MAIN_SCRIPT, 'r') as f:
         main_code = f.read()
     
     # Modify parameters
@@ -104,9 +104,7 @@ def run_tsp_with_ant_count(ant_count: int, experiment_dir: str) -> Dict[str, Any
     
     return results
 
-# ==============================================================================
-# PLOTTING FUNCTIONS
-# ==============================================================================
+# --- plotting functions ---
 def plot_work_comparison(all_results: Dict[int, List[Dict[str, Any]]], filename: str) -> None:
     """Plot work done at checkpoints for different ant counts."""
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -186,9 +184,7 @@ def plot_efficiency_metric(ant_counts: List[int], viables: List[float], runtimes
     plt.savefig(filename)
     plt.close()
 
-# ==============================================================================
-# MAIN EXECUTION
-# ==============================================================================
+# --- main execution ---
 def main() -> None:
     os.makedirs(EXPERIMENT_DIR, exist_ok=True)
     

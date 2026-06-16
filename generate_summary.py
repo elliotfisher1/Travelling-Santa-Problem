@@ -5,6 +5,7 @@ import csv
 import numpy as np
 from pathlib import Path
 
+# Update EXPERIMENT_DIR to match your local output path
 EXPERIMENT_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem/multi_run_experiment')
 all_metrics = []
 

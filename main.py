@@ -9,30 +9,24 @@ from datetime import datetime, timedelta
 from typing import Tuple, List, Dict, Optional, Any
 import matplotlib.dates as mdates
 
-# ==============================================================================
-# Logging Configuration
-# ==============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ==============================================================================
-# CONSTANTS AND DEFAULT PARAMETERS
-# ==============================================================================
+# --- constants and default parameters ---
 PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Travelling Santa Problem')
-MAIN_OUTPUT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'main_run_4 ')
+MAIN_OUTPUT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'main_run_4')
 
 NUM_ITERATIONS = 60000
 PROGRESS_UPDATE_INTERVAL = max(1, int(NUM_ITERATIONS / 1000))
 SPECIAL_ITERS = set(np.linspace(1, NUM_ITERATIONS, num=600, dtype=int))
 NUM_ANTS = 14
-# ==============================================================================
-# PHEROMONE EVOLUTION OUTPUT SETTINGS
-# ==============================================================================
+
+# --- pheromone evolution output settings ---
 PHEROMONE_EVOLUTION_DIR = os.path.join(MAIN_OUTPUT_DIR, 'pheromone_evolution')
 os.makedirs(PHEROMONE_EVOLUTION_DIR, exist_ok=True)
-# save every 0.5% of iterations
+# save every 10% of iterations
 PHEROMONE_SAVE_INTERVAL = max(1, int(np.ceil(NUM_ITERATIONS * 0.1)))
 
-# ACO parameters
+# --- ACO parameters ---
 ALPHA = 3         # pheromone influence
 BETA = 2.1          # heuristic influence
 RHO = 0.5         # base evaporation rate
@@ -54,7 +48,6 @@ MAX_SPEED = 15000.0
 # Physical constants
 AIR_DENSITY = 1.225    # kg/m³
 CROSS_SECTIONAL_AREA = 1.0  # fallback (m²)
-T_NORM = 108000.0
 W_NORM = 1e13
 LATE_PENALTY = 2.10e100
 
@@ -62,9 +55,7 @@ LATE_PENALTY = 2.10e100
 SUNRISE_BUFFER = timedelta(minutes=15)
 SUNSET_BUFFER = timedelta(minutes=15)
 
-# ==============================================================================
-# CITY DATA (with population) AND VALIDATION
-# ==============================================================================
+# --- city data (with population) and validation ---
 cities: List[Dict[str, Any]] = [
 
     {'name': 'Suva', 'lat': -18.1248, 'lon': 178.4501, 'tz_offset': 12,
@@ -139,8 +130,8 @@ cities: List[Dict[str, Any]] = [
     {'name': 'Paris', 'lat': 48.8566, 'lon': 2.3522, 'tz_offset': 1,
      'sunrise': '08:45', 'sunset': '16:55', 'population': 2161000},
 
-   {'name': 'Berlin', 'lat': 52.5200, 'lon': 13.4050, 'tz_offset': 1,
-    'sunrise': '08:15', 'sunset': '16:00', 'population': 3644826},
+    {'name': 'Berlin', 'lat': 52.5200, 'lon': 13.4050, 'tz_offset': 1,
+     'sunrise': '08:15', 'sunset': '16:00', 'population': 3644826},
 
     {'name': 'Chicago', 'lat': 41.8781, 'lon': -87.6298, 'tz_offset': -6,
      'sunrise': '07:15', 'sunset': '16:30', 'population': 2716000},
@@ -204,9 +195,7 @@ validate_cities(cities)
 TOTAL_POPULATION = sum(city['population'] for city in cities)
 CITY_POP_MAP = {city['name']: city['population'] for city in cities}
 
-# ==============================================================================
-# DISTANCE AND SPEED MATRICES
-# ==============================================================================
+# --- distance and speed matrices ---
 def haversine_vectorized(coords: np.ndarray) -> np.ndarray:
     R = 6371.0  # Earth's radius in km
     lat_rad = np.radians(coords[:, 0])
@@ -224,9 +213,7 @@ np.fill_diagonal(distance_matrix, np.inf)
 speed_matrix = np.full((NUM_CITIES, NUM_CITIES), DEFAULT_SANTA_SPEED_KMPH)
 pheromone_matrix = np.full((NUM_CITIES, NUM_CITIES), 1.0)
 
-# ==============================================================================
-# TIME/DATE UTILITY FUNCTIONS
-# ==============================================================================
+# --- time/date utility functions ---
 def get_local_datetime(date_obj: datetime.date, time_str: str) -> datetime:
     return datetime.combine(date_obj, datetime.strptime(time_str, '%H:%M').time())
 
@@ -235,14 +222,6 @@ def get_city_index_by_name(name: str) -> int:
         if c["name"] == name:
             return i
     raise ValueError(f"City not found: {name}")
-
-def get_easternmost_city_index(exclude_names: Optional[set] = None) -> int:
-    exclude_names = exclude_names or set()
-    candidates = [(i, c["lon"]) for i, c in enumerate(cities) if c["name"] not in exclude_names]
-    if not candidates:
-        raise ValueError("No candidate cities to choose from for easternmost city.")
-    # max longitude = easternmost (works fine with your dataset where Suva/Auckland are high +lon)
-    return max(candidates, key=lambda x: x[1])[0]
 
 
 def format_timedelta(td: timedelta) -> str:
@@ -294,9 +273,7 @@ def is_dark_during_departure(city: Dict[str, Any], departure_utc: datetime) -> b
         return prev_sunset <= departure_local
     return False
 
-# ==============================================================================
-# DYNAMIC CROSS-SECTIONAL AREA & SPEED LOGIC
-# ==============================================================================
+# --- dynamic cross-sectional area and speed logic ---
 def get_dynamic_cross_sectional_area(visited_pop: float) -> float:
     if TOTAL_POPULATION <= 0:
         return CROSS_SECTIONAL_AREA
@@ -327,9 +304,7 @@ def get_dynamic_santa_speed(from_idx: int, to_idx: int, departure_utc: datetime)
         return max(MIN_SPEED, min(req_speed, MAX_SPEED))
     return default_speed
 
-# ==============================================================================
-# PLOTTING AND CSV EXPORT FUNCTIONS
-# ==============================================================================
+# --- plotting and CSV export functions ---
 def export_tour_to_csv(journey: List[Dict[str, Any]], filename: str) -> None:
     if not journey:
         logging.warning("No journey details to export.")
@@ -566,12 +541,7 @@ def plot_gantt_tour(journey: List[Dict[str, Any]], filename: str) -> None:
     plt.close()
 
 
-def plot_population_coverage(journey: List[Dict[str, Any]], filename: str) -> None:
-    pass  # Placeholder for existing function
-
-# ==============================================================================
-# CHECKPOINT EXPORT AND PLOTTING FUNCTION
-# ==============================================================================
+# --- checkpoint export and plotting function ---
 def export_checkpoint(checkpoint_name: str, iteration_num: int, best_tour: List[int], 
                      best_length: float, best_time_cost: timedelta, best_waiting_time: timedelta,
                      best_lengths: List[float], best_works: List[float], best_travel_times: List[float],
@@ -654,9 +624,7 @@ def plot_population_coverage(journey: List[Dict[str, Any]], filename: str) -> No
     plt.savefig(filename)
     plt.close()
 
-# ==============================================================================
-# ANT COLONY OPTIMIZATION CLASS
-# ==============================================================================
+# --- ant colony optimization class ---
 class Ant:
     def __init__(self, start_city: int, start_time_utc: datetime) -> None:
         self.start_city = start_city
@@ -778,9 +746,7 @@ class Ant:
         self.current_city = self.start_city
         return True
 
-# ==============================================================================
-# JOURNEY SIMULATION & UTILITY FUNCTIONS
-# ==============================================================================
+# --- journey simulation and utility functions ---
 def simulate_best_tour(best_tour: List[int], departure_datetime_utc: datetime) -> Optional[List[Dict[str, Any]]]:
     if not best_tour:
         logging.warning("No feasible tour found.")
@@ -856,14 +822,7 @@ def run_unit_tests():
     assert np.allclose(d, [[0, 0], [0, 0]], atol=1e-6), "haversine_vectorized failed for identical points"
     logging.info("Unit test passed: haversine_vectorized")
 
-    # arrival = datetime(2024, 12, 24, 12, 0)
-    # adjusted, wait = adjust_arrival_time([c for c in cities if c['name'] == 'North Pole'][0], arrival)
-    # assert adjusted == arrival and wait == timedelta(0), "adjust_arrival_time failed for North Pole"
-    # logging.info("Unit test passed: adjust_arrival_time for North Pole")
-
-# ==============================================================================
-# MAIN EXECUTION
-# ==============================================================================
+# --- main execution ---
 def main() -> None:
     global pheromone_matrix, EPSILON, DEFAULT_SANTA_SPEED_KMPH, speed_matrix
 
@@ -928,8 +887,7 @@ def main() -> None:
     ])
     metrics_writer.writeheader()
 
-    # Viable threshold for early stopping (same as in city_scaling_experiment.py)
-    VIABLE_THRESHOLD = 1e6
+    VIABLE_THRESHOLD = 1e14
 
     for iteration in range(NUM_ITERATIONS):
         EPSILON = max(INITIAL_EPSILON * (DECAY_RATE ** iteration), MIN_EPSILON)

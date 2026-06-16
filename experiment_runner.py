@@ -14,10 +14,12 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# --- configuration ---
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MAIN_SCRIPT = os.path.join(SCRIPT_DIR, 'main.py')
 
 NUM_RUNS = 15  # Scaled down from 30
 NUM_ITERATIONS = 1000  # Half of default 6000
@@ -25,9 +27,7 @@ NUM_ANTS = 15  # Half of default 50
 PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem')
 EXPERIMENT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'multi_run_experiment')
 
-# ==============================================================================
-# UTILITY FUNCTIONS
-# ==============================================================================
+# --- utility functions ---
 def run_single_experiment(run_number: int, run_dir: str) -> Dict[str, Any]:
     """
     Run a single iteration of the full TSP algorithm.
@@ -40,14 +40,14 @@ def run_single_experiment(run_number: int, run_dir: str) -> Dict[str, Any]:
 
     # Import main.py dynamically to run it with modified output directory
     import importlib.util
-    spec = importlib.util.spec_from_file_location("main_module", "/Users/elliotfisher/Travelling-Santa-Problem-1/main.py")
+    spec = importlib.util.spec_from_file_location("main_module", MAIN_SCRIPT)
     main_module = importlib.util.module_from_spec(spec)
 
     # Override output directory
     start_time = time.time()
-    
+
     # We'll read the main.py and execute with modified output dir
-    with open("/Users/elliotfisher/Travelling-Santa-Problem-1/main.py", 'r') as f:
+    with open(MAIN_SCRIPT, 'r') as f:
         main_code = f.read()
     
     # Replace the main output directory (match actual definition in main.py)
@@ -230,9 +230,7 @@ def generate_summary_table(all_metrics: List[Dict[str, Any]], filename: str) -> 
 
     logging.info(f"Summary table saved to {txt_filename}")
 
-# ==============================================================================
-# MAIN EXECUTION
-# ==============================================================================
+# --- main execution ---
 def main() -> None:
     os.makedirs(EXPERIMENT_DIR, exist_ok=True)
 

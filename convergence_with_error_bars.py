@@ -20,9 +20,8 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ==============================================================================
-# Configuration
-# ==============================================================================
+# --- configuration ---
+# Update these paths to match your local output directories
 
 # Multi-run experiment (source of statistics)
 MULTI_RUN_DIR = '/Users/elliotfisher/Desktop/Dissertation Travelling Santa Problem/multi_run_experiment'
@@ -34,9 +33,6 @@ TSAP_METRICS_CSV = os.path.join(TSAP_OUTPUT_DIR, 'iteration_metrics.csv')
 # Output directory for plots
 OUTPUT_DIR = TSAP_OUTPUT_DIR
 
-# ==============================================================================
-# Core Functions
-# ==============================================================================
 
 def extract_multirun_statistics(experiment_dir: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
     """

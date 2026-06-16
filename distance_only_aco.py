@@ -9,16 +9,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any
 
-# ==============================================================================
-# Logging Configuration
-# ==============================================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ==============================================================================
-# CONSTANTS AND DEFAULT PARAMETERS
-# ==============================================================================
+# --- constants and default parameters ---
 PARENT_EXPERIMENTS_DIR = os.path.expanduser('~/Desktop/Dissertation Travelling Santa Problem')
 MAIN_OUTPUT_DIR = os.path.join(PARENT_EXPERIMENTS_DIR, 'distance_only_baseline3')
 
@@ -46,9 +41,7 @@ DEFAULT_SANTA_SPEED_KMPH = 11500  # Constant speed (no constraint-based adjustme
 DEPARTURE_DATETIME_UTC = datetime(2024, 12, 24, 0, 0)  # Start time (for calculating work)
 
 
-# ==============================================================================
-# CITY DATA
-# ==============================================================================
+# --- city data ---
 cities: List[Dict[str, Any]] = [
     {'name': 'Suva', 'lat': -18.1248, 'lon': 178.4501, 'tz_offset': 12,
      'sunrise': '05:35', 'sunset': '18:45', 'population': 93970},
@@ -137,9 +130,7 @@ cities: List[Dict[str, Any]] = [
 NUM_CITIES = len(cities)
 TOTAL_POPULATION = sum(city['population'] for city in cities)
 
-# ==============================================================================
-# DISTANCE MATRIX
-# ==============================================================================
+# --- distance matrix ---
 def haversine_vectorized(coords: np.ndarray) -> np.ndarray:
     R = 6371.0  # Earth's radius in km
     lat_rad = np.radians(coords[:, 0])
@@ -156,9 +147,7 @@ np.fill_diagonal(distance_matrix, np.inf)
 speed_matrix = np.full((NUM_CITIES, NUM_CITIES), DEFAULT_SANTA_SPEED_KMPH)
 pheromone_matrix = np.full((NUM_CITIES, NUM_CITIES), 1.0)
 
-# ==============================================================================
-# ANT CLASS (SIMPLIFIED FOR DISTANCE-ONLY)
-# ==============================================================================
+# --- ant class (simplified for distance-only) ---
 class DistanceOnlyAnt:
     def __init__(self, start_city: int, epsilon: float = INITIAL_EPSILON) -> None:
         self.start_city = start_city
@@ -204,7 +193,6 @@ class DistanceOnlyAnt:
         self.tour.append(self.start_city)
 
 def get_dynamic_cross_sectional_area(visited_pop: float) -> float:
-    """Calculate dynamic cross-sectional area based on visited population."""
     if TOTAL_POPULATION <= 0:
         return CROSS_SECTIONAL_AREA
     fraction_remaining = max(0.0, (TOTAL_POPULATION - visited_pop) / TOTAL_POPULATION)
@@ -236,10 +224,7 @@ def calculate_work_for_tour(tour: List[int]) -> float:
     
     return total_work
 
-# ==============================================================================
-# ==============================================================================
-# PLOTTING FUNCTIONS
-# ==============================================================================
+# --- plotting functions ---
 def plot_tour(tour: List[int], tour_length: float, filename: str) -> None:
     """Plot the tour on a map with city locations and connections."""
     if not tour:
@@ -283,9 +268,7 @@ def plot_convergence(iterations: List[int], best_lengths: List[float], filename:
     plt.savefig(filename)
     plt.close()
 
-# ==============================================================================
-# MAIN EXECUTION
-# ==============================================================================
+# --- main execution ---
 def main() -> None:
     global pheromone_matrix
 
